@@ -9,6 +9,9 @@
 #define BACKWARD					-1
 #define INCREASE					1
 #define DECREASE					-1
+#define INTACT_CMD					1
+#define INTACT_NEXT_EVENT			-8
+#define INTACT_QUIT					-9
 #define CMD_LENGTH					4
 #define MAX_NAME_LENGTH				(64 + 1)
 #define SERVER_TYPE_LENGTH			MAX_NAME_LENGTH
@@ -67,7 +70,7 @@
 
 enum Verbose {VERBOSE_NONE, VERBOSE_STATS, VERBOSE_BRIEF, VERBOSE_ALL, END_VERBOSE};
 
-enum Sim_Command {CMD_HELO, CMD_OK, CMD_ERR, CMD_REDY, CMD_PSHJ, CMD_JOBN, CMD_JOBP, CMD_NONE, \
+enum Sim_Command {CMD_HELO, CMD_AUTH, CMD_OK, CMD_ERR, CMD_REDY, CMD_PSHJ, CMD_JOBN, CMD_JOBP, CMD_NONE, \
 				CMD_GETS, CMD_RESC, CMD_SCHD, CMD_JCPL, CMD_RESF, CMD_RESR, CMD_LSTJ, CMD_CNTJ, \
 				CMD_MIGJ, CMD_EJWT, CMD_TERM, CMD_KILJ, CMD_QUIT, END_SIM_CMD};
 				
@@ -77,7 +80,7 @@ enum LimitName {Port_Limit, JCnt_Limit, JRunTime_Limit, JPop_Limit, SEnd_Limit,
 				SType_Limit, Res_Limit, SBootTime_Limit, SHourlyRate_Limit, RSeed_Limit, T_Grain_Limit, F_Scale_Limit, 
 				CCnt_Limit, Mem_Limit, Disk_Limit, WMinLoad_Limit, WMaxLoad_Limit, JType_Limit, WorkloadTime_Limit};
 
-enum SimulationOption {SO_BreakPoint, SO_Config, SO_Duration, SO_Failure, SO_Granularity, SO_Help, 
+enum SimulationOption {SO_BreakPoint, SO_Config, SO_Duration, SO_Failure, SO_Granularity, SO_Help, SO_Interactive,
 				SO_JobCount, SO_Limit, SO_Newline, SO_OmitFailMsg, SO_Port, SO_RandomSeed, SO_Scale, SO_Verbose, END_SIM_OPTION};
 
 enum HelpOption {H_All, H_Usage, H_Limits, H_States, H_Cmd, END_HELP_OPTION};
@@ -321,7 +324,7 @@ typedef struct {
 	char cmd[CMD_LENGTH + 1];
 	int issuer;
 	char *desc;
-	int (*CmdHandler)(char *, char **);
+	int (*CmdHandler)(char *, char *);
 } Command;
 
 typedef struct DATAFieldSize {

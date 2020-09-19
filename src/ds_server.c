@@ -44,12 +44,13 @@
 //#define DEBUG
 //#define FAIL_DEBUG
 
-#define VERSION						"26-August, 2020 @ MQ - client-server"
+#define VERSION						"19-September, 2020 @ MQ - client-server"
 #define DEVELOPERS					"Young Choon Lee, Young Ki Kim and Jayden King"
 
 // global variables
 Command cmds[] = {	// only those that need to be explicitly processed/handled
 	{CMD_HELO, "HELO", CI_Client, "initial message for the connection", NULL},
+	{CMD_AUTH, "AUTH", CI_Client, "authenticate user", NULL},
 	{CMD_OK, "OK", CI_Both, "general acknowledgement", NULL},
 	{CMD_ERR, "ERR", CI_Server, "in response to an invalid command", NULL},
 	{CMD_JOBN, "JOBN", CI_Server, "normal job submission", NULL},
@@ -103,6 +104,7 @@ SimOption simOpts[] = {
 					{"f(ailure): failure distribution model (e.g., teragrid, nd07cpu and websites02)", 'f', TRUE, "teragrid|nd07cpu|websits02|g5k06|pl05|ldns04", FALSE},
 					{"g(ranularity): time granularity for resource failures", 'g', TRUE, "n (in second)", FALSE},
 					{"h(elp): usage", 'h', TRUE, "all|usage|limits|states", FALSE},
+					{"i(nteractive): run simulation in the interactive mode", 'i', FALSE, "", FALSE},
 					{"j(ob): set job count", 'j', TRUE, "n (max #jobs to generate)", FALSE},
 					{"l(imit of #servers): the number of servers (uniform to all server types)", 'l', TRUE, "n", FALSE},
 					{"n(ewline): newline character (\\n) at the end of each message", 'n', FALSE, NULL, FALSE},
@@ -228,6 +230,7 @@ int main(int argc, char **argv)
 	char msgToSend[LARGE_BUF_SIZE] = ""; 
 	char msgRcvd[LARGE_BUF_SIZE] = ""; 
 	char username[LARGE_BUF_SIZE] = "";
+	int ret;
 
 	InitSim();
 
@@ -251,29 +254,40 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	serv.sin_family = AF_INET;
-	serv.sin_port = htons(g_sConfig.port); // set the port
-	serv.sin_addr.s_addr = INADDR_ANY;
-	assert((g_fd = socket(AF_INET, SOCK_STREAM, 0)) >= 0); // create a TCP socket
+	if (!simOpts[SO_Interactive].used) {
+		serv.sin_family = AF_INET;
+		serv.sin_port = htons(g_sConfig.port); // set the port
+		serv.sin_addr.s_addr = INADDR_ANY;
+		assert((g_fd = socket(AF_INET, SOCK_STREAM, 0)) >= 0); // create a TCP socket
 
-	if (setsockopt(g_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &(int){ 1 }, sizeof(int)) < 0)
-		perror("setsockopt(SO_REUSEADDR | SO_REUSEPORT) failed");
+		if (setsockopt(g_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &(int){ 1 }, sizeof(int)) < 0)
+			perror("setsockopt(SO_REUSEADDR | SO_REUSEPORT) failed");
 
-	bind(g_fd, (struct sockaddr *)&serv, sizeof(serv)); //assigns the address specified by serv to the socket
-	//listen(g_fd, MAX_CONNECTIONS); //Listen for client connections. Maximum 10 connections will be permitted.
-	listen(g_fd, 1); //Listen for client connections. 
-	PrintWelcomeMsg(argc, argv);
-	//Now we start handling the connections.
-	if ((g_conn = accept(g_fd, (struct sockaddr *)NULL, NULL)) < 0) {
-        perror("accept"); 
-		GracefulExit();
-    }
+		bind(g_fd, (struct sockaddr *)&serv, sizeof(serv)); //assigns the address specified by serv to the socket
+		//listen(g_fd, MAX_CONNECTIONS); //Listen for client connections. Maximum 10 connections will be permitted.
+		listen(g_fd, 1); //Listen for client connections. 
+	
+		//Now we start handling the connections.
+		if ((g_conn = accept(g_fd, (struct sockaddr *)NULL, NULL)) < 0) {
+			perror("accept"); 
+			GracefulExit();
+		}
+	}
 	if (signal(SIGINT, SigHandler) == SIG_ERR)
 		fprintf(stderr, "\ncan't catch SIGINT\n");
 	
+	PrintWelcomeMsg(argc, argv);
+	
 	// read "HELO"
 	while (TRUE) {
-		RecvMsg(msgRcvd);
+		ret = RecvMsg("", msgRcvd);
+		if (simOpts[SO_Interactive].used) {
+			if (ret == INTACT_QUIT) 
+				goto Quit;
+			else
+			if (ret != INTACT_CMD)
+				continue;
+		}
 		if (!strcmp(msgRcvd, "HELO")) {
 			strcpy(msgToSend, "OK");
 			break;
@@ -286,7 +300,14 @@ int main(int argc, char **argv)
 	SendMsg(msgToSend);
 
 	while (TRUE) {
-		RecvMsg(msgRcvd);
+		ret = RecvMsg(msgToSend, msgRcvd);
+		if (simOpts[SO_Interactive].used) {
+			if (ret == INTACT_QUIT) 
+				goto Quit;
+			else
+			if (ret != INTACT_CMD)
+				continue;
+		}
 		if (strlen(msgRcvd) > CMD_LENGTH && !strncmp(msgRcvd, "AUTH", CMD_LENGTH)) {
 			strncpy(username, &msgRcvd[CMD_LENGTH], strlen(msgRcvd) - CMD_LENGTH);
 			strcpy(msgToSend, "OK");
@@ -302,7 +323,14 @@ int main(int argc, char **argv)
 	SendMsg(msgToSend);
 
 	while (TRUE) {
-		RecvMsg(msgRcvd);
+		ret = RecvMsg(msgToSend, msgRcvd);
+		if (simOpts[SO_Interactive].used) {
+			if (ret == INTACT_QUIT) 
+				goto Quit;
+			else
+			if (ret != INTACT_CMD)
+				continue;
+		}
 		if (!strcmp(msgRcvd, "REDY"))
 			break;
 			
@@ -311,7 +339,7 @@ int main(int argc, char **argv)
 		SendMsg(msgToSend);
 	}
 	// scheduling loop
-	while (strcmp(msgRcvd, "QUIT")) {
+	while (strcmp(msgRcvd, "QUIT") && ret != INTACT_QUIT) {
 		int i, printed;
 		static int nextEvent = FALSE;
 		
@@ -326,10 +354,12 @@ int main(int argc, char **argv)
 			sprintf(msgToSend, "ERR: invalid command (%s)", msgRcvd);
 		else
 		if (cmds[i].CmdHandler) {
-			char *buffer = (char *)calloc(LARGE_BUF_SIZE, sizeof(char));
-			cmds[i].CmdHandler(msgRcvd, &buffer);	// actual command handling
+			//char *buffer = (char *)calloc(LARGE_BUF_SIZE, sizeof(char));
+			char buffer[LARGE_BUF_SIZE];
+			ret = cmds[i].CmdHandler(msgRcvd, buffer);	// actual command handling
+			if (ret == INTACT_QUIT) goto Quit;
 			strcpy(msgToSend, buffer);
-			free(buffer);
+			//free(buffer);
 		}
 		
 		// if there is any completed job in this round; 
@@ -342,33 +372,38 @@ int main(int argc, char **argv)
 
 		printed = SendMsg(msgToSend);
 		if (printed && (nextEvent || (
-			simOpts[SO_BreakPoint].used && !strncmp(msgToSend, "JOB", 3) && g_sConfig.bp == g_ss.curJobID-1)))
-			nextEvent = InteractiveMode(msgToSend, nextEvent);	
-		RecvMsg(msgRcvd);
+			simOpts[SO_BreakPoint].used && !strncmp(msgToSend, "JOB", 3) && g_sConfig.bp == g_ss.curJobID-1))) {
+			nextEvent = BreakPointMode(msgToSend, nextEvent);
+		}
+
+		ret = RecvMsg(msgToSend, msgRcvd);
 	}
 
-	// complete the execution of all scheduled jobs	
-	g_ss.curSimTime = UINT_MAX;
-	g_ss.curSimTime = UpdateServerStates();
-	
-	strcpy(msgToSend, "QUIT");
-	SendMsg(msgToSend);
-	
-	if (g_ss.waitJQ || g_ss.curJobID < g_workloadInfo.numJobs) { // scheduling incomplete
-		fprintf(stderr, "%d jobs not scheduled!\n", g_workloadInfo.numJobs - g_ss.curJobID + CountWJobs());
-		if (simOpts[SO_Verbose].used)
-			PrintUnscheduledJobs();
-	}
-	close(g_fd);
+	if (!simOpts[SO_Interactive].used || ret != INTACT_QUIT) {
+		// complete the execution of all scheduled jobs	
+		g_ss.curSimTime = UINT_MAX;
+		g_ss.curSimTime = UpdateServerStates();
+		
+		strcpy(msgToSend, "QUIT");
+		SendMsg(msgToSend);
+		
+		if (g_ss.waitJQ || g_ss.curJobID < g_workloadInfo.numJobs) { // scheduling incomplete
+			fprintf(stderr, "%d jobs not scheduled!\n", g_workloadInfo.numJobs - g_ss.curJobID + CountWJobs());
+			if (simOpts[SO_Verbose].used)
+				PrintUnscheduledJobs();
+		}
+		if (!simOpts[SO_Interactive].used)
+			close(g_fd);
 
-	if (!g_sConfig.jobFile)
-		WriteJobs();
-	
-	if (g_systemInfo.rFailT)
-		WriteResFailures();
-	
-	PrintStats();
-	
+		if (!g_sConfig.jobFile)
+			WriteJobs();
+		
+		if (g_systemInfo.rFailT)
+			WriteResFailures();
+		
+		PrintStats();
+	}
+Quit:	
 	FreeAll();
 	
 	return 0;
@@ -493,43 +528,53 @@ int SendMsg(char *msg)
 	int ret = 0;
 	
 	CompleteSendMsg(msg, strlen(msg));
-	if ((send(g_conn, msg, strlen(msg), 0)) < 0) {
-		fprintf(stderr, "%s wasn't not sent successfully!\n", msg);
-		GracefulExit();
+	if (!simOpts[SO_Interactive].used) {
+		if ((send(g_conn, msg, strlen(msg), 0)) < 0) {
+			fprintf(stderr, "%s wasn't not sent successfully!\n", msg);
+			GracefulExit();
+		}
+
+		if (simOpts[SO_Verbose].used == VERBOSE_ALL ||
+			(simOpts[SO_Verbose].used == VERBOSE_BRIEF && 
+				(!strncmp(orgMsg, "JOB", 3) || 
+				!strcmp(orgMsg, "OK") || 
+				!strcmp(orgMsg, "NONE") ||
+				!strncmp(orgMsg, "JCPL", CMD_LENGTH) ||
+				!strncmp(orgMsg, "RESF", CMD_LENGTH) ||
+				!strncmp(orgMsg, "RESR", CMD_LENGTH) ||
+				!strcmp(orgMsg, "QUIT"))))
+					ret = printf("SENT %s\n", orgMsg);
 	}
-	if (simOpts[SO_Verbose].used == VERBOSE_ALL ||
-		(simOpts[SO_Verbose].used == VERBOSE_BRIEF && 
-			(!strncmp(orgMsg, "JOB", 3) || 
-			!strcmp(orgMsg, "OK") || 
-			!strcmp(orgMsg, "NONE") ||
-			!strncmp(orgMsg, "JCPL", CMD_LENGTH) ||
-			!strncmp(orgMsg, "RESF", CMD_LENGTH) ||
-			!strncmp(orgMsg, "RESR", CMD_LENGTH) ||
-			!strcmp(orgMsg, "QUIT")))) {
-			ret = printf("SENT %s\n", orgMsg);
-	}
+	else
+		ret = printf("%s\n", orgMsg);
 
 	free(orgMsg);
 	
 	return ret;
 }
 
-int RecvMsg(char *msg)
+int RecvMsg(char *msgSent, char *msgRcvd)
 {
 	int recvCnt;
 	int ret = 0;
 	
-	recvCnt = read(g_conn, msg, LARGE_BUF_SIZE - 1);
-	CompleteRecvMsg(msg, recvCnt);
-	if (simOpts[SO_Verbose].used == VERBOSE_ALL ||
-		(simOpts[SO_Verbose].used == VERBOSE_BRIEF && 
-			(!strcmp(msg, "HELO") ||
-			!strncmp(msg, "AUTH", CMD_LENGTH) || 
-			!strcmp(msg, "REDY") || 
-			!strncmp(msg, "SCHD", CMD_LENGTH) || 
-			!strncmp(msg, "MIGJ", CMD_LENGTH) || 
-			!strcmp(msg, "QUIT")))) {
-			ret = printf("RCVD %s\n", msg); 
+	if (!simOpts[SO_Interactive].used) {
+		recvCnt = read(g_conn, msgRcvd, LARGE_BUF_SIZE - 1);
+		CompleteRecvMsg(msgRcvd, recvCnt);
+		
+		if (simOpts[SO_Verbose].used == VERBOSE_ALL ||
+			(simOpts[SO_Verbose].used == VERBOSE_BRIEF && 
+				(!strcmp(msgRcvd, "HELO") ||
+				!strncmp(msgRcvd, "AUTH", CMD_LENGTH) || 
+				!strcmp(msgRcvd, "REDY") || 
+				!strncmp(msgRcvd, "SCHD", CMD_LENGTH) || 
+				!strncmp(msgRcvd, "MIGJ", CMD_LENGTH) || 
+				!strcmp(msgRcvd, "QUIT")))) {
+				ret = printf("RCVD %s\n", msgRcvd); 
+		}
+	}
+	else {
+		ret = InteractiveMode(msgSent, msgRcvd);
 	}
 	
 	return ret;
@@ -544,7 +589,7 @@ inline int IsValidNum(char *buf)
 	return TRUE;
 }
 
-int InteractiveMode(char *msgToSend, int nextEvent)
+int BreakPointMode(char *msgToSend, int nextEvent)
 {
 	char cmd[DEFAULT_BUF_SIZE];
 	int jID = UNDEFINED;
@@ -552,14 +597,14 @@ int InteractiveMode(char *msgToSend, int nextEvent)
 	nextEvent = FALSE;
 
 	while (!nextEvent && jID == UNDEFINED) {
-		printf("\n# \033[4m\033[1mc\033[24m\033[22montinue|\033[4mjob id\033[24m|\033[4m\033[1mp\033[24m\033[22mrint \033[4mserver_type\033[24m [\033[4mserver_id\033[24m]|\033[4m\033[1mq\033[24m\033[22muit > ");
+		printf("\n# \033[4m\033[1mn\033[24m\033[22mext event|\033[4mjob id\033[24m|\033[4m\033[1mp\033[24m\033[22mrint \033[4mserver_type\033[24m [\033[4mserver_id\033[24m]|\033[4m\033[1mq\033[24m\033[22muit > ");
 		int ch = getc(stdin);
 		if (ch != '\n') {
 			ungetc(ch, stdin);
 			fgets(cmd, DEFAULT_BUF_SIZE, stdin);
 		}
 
-		if (ch == '\n' || cmd[0] == 'c')
+		if (ch == '\n' || cmd[0] == 'n')
 			nextEvent = TRUE;
 		else {
 			int numFields = UNDEFINED, servType, sID;
@@ -626,6 +671,128 @@ int InteractiveMode(char *msgToSend, int nextEvent)
 	
 	return nextEvent;
 }
+
+// IsCmd checks the validity of cmd (cmdStr) and also cleans cmd if valid
+int IsCmd(char *cmdStr)
+{
+	int cmdLen, i, j, k;
+	char buffer[DEFAULT_BUF_SIZE], cmd[DEFAULT_BUF_SIZE];
+
+	cmdLen = strlen(cmdStr);
+	
+	for (i = 0; i < cmdLen && isspace(cmdStr[i]); i++);
+	if (i == cmdLen) return FALSE;
+	for (j = 0; i < cmdLen && isalpha(cmdStr[i]); i++, j++)
+		cmd[j] = toupper(cmdStr[i]);
+	cmd[j] = '\0';
+	for (k = 0; k < END_SIM_CMD; k++) {
+		if ((cmds[k].issuer == CI_Client || cmds[k].issuer == CI_Both) && !strcmp(cmd, cmds[k].cmd)) {
+			for (; i < cmdLen && isspace(cmdStr[i]); i++);
+			if (i == cmdLen)
+				strcpy(buffer, cmd);
+			else {
+				// the option cmd must start with a uppercase letter, e.g., All and Type
+				if ((!strcmp(cmd, "GETS") || !strcmp(cmd, "RESC")) && isalpha(cmdStr[i]))
+					cmdStr[i] = toupper(cmdStr[i]);
+				sprintf(buffer, "%s %s", cmd, &cmdStr[i]);
+			}
+			strcpy(cmdStr, buffer); // make the command uppercase when valid
+			if (cmdStr[strlen(cmdStr) - 1] == '\n')	// get rid of '\n'
+				cmdStr[strlen(cmdStr) - 1] = '\0';
+
+			return TRUE;
+		}
+	}
+	
+	return FALSE;
+}
+
+int InteractiveMode(char *msgSent, char *msgRcvd)
+{
+	char cmd[DEFAULT_BUF_SIZE] = " ";
+
+	while (TRUE) {
+		int numFields = UNDEFINED, servType, sID, ch;
+		char *optStr, *token;
+		
+		cmd[0] = '\0';
+		printf("\n# \033[4m\033[1mn\033[24m\033[22mext event|");
+		printf("\033[4m\033[1mp\033[24m\033[22mrint \033[4mserver_type\033[24m [\033[4mserver_id\033[24m]|");
+		printf("\033[4m\033[1mr\033[24m\033[22mepeat prev cmd|\033[4mds-sim cmd\033[24m|\033[4m\033[1mq\033[24m\033[22muit > ");
+		
+		ch = getc(stdin);
+		if (ch != '\n') {
+			ungetc(ch, stdin);
+			fgets(cmd, DEFAULT_BUF_SIZE, stdin);
+		}
+
+		strcpy(msgRcvd, cmd);
+
+		if (ch == '\n' || cmd[0] == 'n')
+			return INTACT_NEXT_EVENT;
+
+		if (IsCmd(cmd)) break;	// IsCmd also cleans cmd if valid
+		switch (cmd[0]) {
+			case 'p':
+				optStr = strdup(cmd);
+				token = strtok(optStr, " ");
+				if (isspace(token[strlen(token)-1]))
+						token[strlen(token)-1] = '\0';
+
+				if (strcmp(token, "p")) 
+					break;
+				numFields = 0;
+				if ((token = strtok(0, " "))) {
+					if (isspace(token[strlen(token)-1]))
+						token[strlen(token)-1] = '\0';
+					servType = FindResTypeByName(token);
+					if (servType != UNDEFINED) {
+						numFields++;
+						if ((token = strtok(0, " "))) {
+							if (isspace(token[strlen(token)-1]))
+								token[strlen(token)-1] = '\0';
+							if (IsValidNum(token) && (sID = atoi(token)) >= 0 && sID < GetServerLimit(servType))
+								numFields++;
+						}
+					}
+				}
+
+				if (numFields == 0)	{ // print the states of all servers
+					SendResInfoAll(FALSE);
+					FinalizeResInfoBuf();
+				}
+				else {
+					if (numFields == 1) {	// print the states of all servers of specified type
+						SendResInfoByType(servType, NULL, FALSE);
+						FinalizeResInfoBuf();
+		
+					}
+					else { // print the state of specified server
+						SendResInfoByServer(servType, sID, NULL, FALSE);
+						FinalizeResInfoBuf();
+					}
+				}
+				puts(g_batchMsg);
+				free(g_batchMsg);
+				g_batchMsg = NULL;
+				free(optStr);
+				break;
+			case 'q':
+				return INTACT_QUIT;
+			case 'r':
+				printf("%s\n", msgSent);
+				break;
+			default:
+				printf("No such command!\n");
+				break;
+		}
+	}
+	
+	strcpy(msgRcvd, cmd);
+	
+	return INTACT_CMD;
+}
+
 
 int GetIntValue(char *str, char *desc)
 {
@@ -747,6 +914,9 @@ int ConfigSim(int argc, char **argv)
 				g_sConfig.bp = retValue;
 				simOpts[SO_BreakPoint].used = TRUE;
 				break;
+			case 'i':	// interactive mode
+				simOpts[SO_Interactive].used = TRUE;
+				break;
 			case 'j':	// job count
 				if ((retValue = GetIntValue(optarg, limits[JCnt_Limit].name)) == UNDEFINED)
 					return FALSE;
@@ -852,6 +1022,10 @@ int ConfigSim(int argc, char **argv)
 			fprintf(stderr, "Configuration file (%s) invalid!\n", g_sConfig.configFilename);
 			return FALSE;
 		}
+	}
+	
+	if (simOpts[SO_BreakPoint].used && simOpts[SO_Verbose].used < VERBOSE_BRIEF) {
+		simOpts[SO_Verbose].used = VERBOSE_BRIEF;
 	}
 
 	return TRUE;
@@ -2548,7 +2722,7 @@ coreCount=\"%d\" memory=\"%d\" disk=\"%d\" />\n", sType->name, sType->limit, sTy
 	fclose(f);
 }
 
-int HandleREDY(char *msgRcvd, char **msgToSend)
+int HandleREDY(char *msgRcvd, char *msgToSend)
 {
 	static long int njFTime;	// finish time of next completing job; it has to be here as it doesn't get updated every time
 	long int nJobSubmT;	// submission time of next job
@@ -2640,38 +2814,38 @@ int HandleREDY(char *msgRcvd, char **msgToSend)
 		g_ncJobs = NULL;
 	}
 	
-	strcpy(*msgToSend, buffer);
+	strcpy(msgToSend, buffer);
 			
 	return TRUE;
 }
 
-int HandlePSHJ(char *msgRcvd, char **msgToSend)
+int HandlePSHJ(char *msgRcvd, char *msgToSend)
 {
 	int ret = BackFillJob(g_lastJobSent);
 	if (ret == UNDEFINED)
-		sprintf(*msgToSend, "Error: simulation can't continue at Job %d at %d\n", g_lastJobSent->id, g_ss.curSimTime);
+		sprintf(msgToSend, "Error: simulation can't continue at Job %d at %d\n", g_lastJobSent->id, g_ss.curSimTime);
 	else {
 		g_lastJobSent = NULL;
-		strcpy(*msgToSend, "OK");
+		strcpy(msgToSend, "OK");
 	}
 
 	return TRUE;
 }
 
 
-int HandleGETS(char *msgRcvd, char **msgToSend)
+int HandleGETS(char *msgRcvd, char *msgToSend)
 {
 	int ret = SendResInfo(msgRcvd);
 			
 	if (ret == UNDEFINED) 
-		sprintf(*msgToSend, "ERR: invalid resource infomation query (%s)!", msgRcvd);
+		sprintf(msgToSend, "ERR: invalid resource infomation query (%s)!", msgRcvd);
 	else
-		strcpy(*msgToSend, END_DATA);
+		strcpy(msgToSend, END_DATA);
 
 	return TRUE;
 }
 
-int HandleSCHD(char *msgRcvd, char **msgToSend)
+int HandleSCHD(char *msgRcvd, char *msgToSend)
 {
 	int jID, sID, status;
 	char stName[MAX_NAME_LENGTH];
@@ -2688,84 +2862,85 @@ int HandleSCHD(char *msgRcvd, char **msgToSend)
 			g_lastJobSent = NULL;
 	}
 
-	strcpy(*msgToSend, buffer);
+	strcpy(msgToSend, buffer);
 
 	return TRUE;
 }
 
-int HandleJCPL(char *msgRcvd, char **msgToSend)
+int HandleJCPL(char *msgRcvd, char *msgToSend)
 {
 	return 0;
 }
 
-int HandleLSTJ(char *msgRcvd, char **msgToSend)
+int HandleLSTJ(char *msgRcvd, char *msgToSend)
 {
 	int ret = SendJobsOnServer(msgRcvd);
 			
 	if (ret == UNDEFINED)
-		sprintf(*msgToSend, "ERR: invalid job listing query (%s)!", msgRcvd);
+		sprintf(msgToSend, "ERR: invalid job listing query (%s)!", msgRcvd);
 	else
-		strcpy(*msgToSend, END_DATA);
+	if (ret != INTACT_QUIT)
+		strcpy(msgToSend, END_DATA);
 
-	return TRUE;
+	return ret;
 }
 
-int HandleCNTJ(char *msgRcvd, char **msgToSend)
+int HandleCNTJ(char *msgRcvd, char *msgToSend)
 {
 	int ret = SendJobCountOfServer(msgRcvd);
 			
 	if (ret == UNDEFINED)
-		sprintf(*msgToSend, "ERR: invalid job count query (%s)!", msgRcvd);
+		sprintf(msgToSend, "ERR: invalid job count query (%s)!", msgRcvd);
 	else
-		sprintf(*msgToSend, "%d", ret);
+		sprintf(msgToSend, "%d", ret);
 
 	return TRUE;
 }
 
-int HandleMIGJ(char *msgRcvd, char **msgToSend)
+int HandleMIGJ(char *msgRcvd, char *msgToSend)
 {
 	int ret = MigrateJob(msgRcvd);
 
 	if (!ret)
-		sprintf(*msgToSend, "ERR: %s!", msgRcvd);
+		sprintf(msgToSend, "ERR: %s!", msgRcvd);
 	else
-		sprintf(*msgToSend, "%s", SchdStatusList[ret-1].status);
+		sprintf(msgToSend, "%s", SchdStatusList[ret-1].status);
 
 	return TRUE;
 }
 
-int HandleEJWT(char *msgRcvd, char **msgToSend)
+int HandleEJWT(char *msgRcvd, char *msgToSend)
 {
 	int ret = SendEstWTOfServer(msgRcvd);
 			
 	if (ret == UNDEFINED)
-		sprintf(*msgToSend, "ERR: invalid estimated waiting time query (%s)!", msgRcvd);
+		sprintf(msgToSend, "ERR: invalid estimated waiting time query (%s)!", msgRcvd);
 	else
-		sprintf(*msgToSend, "%d", ret);
+		sprintf(msgToSend, "%d", ret);
 
 	return TRUE;
 }
 
-int HandleTERM(char *msgRcvd, char **msgToSend)
+int HandleTERM(char *msgRcvd, char *msgToSend)
 {
 	int ret = TerminateServer(msgRcvd);
 			
 	if (ret == UNDEFINED) // either incorrect format or unavailable/failed server specified
-		sprintf(*msgToSend, "ERR: invalid server termination command (%s)!", msgRcvd);
+		sprintf(msgToSend, "ERR: invalid server termination command (%s)!", msgRcvd);
 	else
-		sprintf(*msgToSend, "%d jobs killed", ret);
+		sprintf(msgToSend, "%d jobs killed", ret);
 
 	return TRUE;
 }
 
-int HandleKILJ(char *msgRcvd, char **msgToSend)
+int HandleKILJ(char *msgRcvd, char *msgToSend)
 {
 	int ret = KillJob(msgRcvd);
 			
 	if (ret == UNDEFINED)
-		sprintf(*msgToSend, "ERR: invalid job termination command (%s)!", msgRcvd);
+		sprintf(msgToSend, "ERR: invalid job termination command (%s)!", msgRcvd);
 	else
-		sprintf(*msgToSend, "OK");
+		sprintf(msgToSend, "OK");
 
 	return TRUE;
 }
@@ -3737,11 +3912,12 @@ int GetServerAvailTime(int sType, int sID, ServerRes *resReq)
 }
 
 
-void SendDataHeader(char *cmd, int nRecs)
+int SendDataHeader(char *cmd, int nRecs)
 {
 	char msgToSend[LARGE_BUF_SIZE];
 	char msgRcvd[LARGE_BUF_SIZE];
 	int recLen;	// record length
+	int ret;
 
 	if (!strcmp(cmd, "RESC"))
 		strcpy(msgToSend, "DATA");	// old RECS
@@ -3756,10 +3932,13 @@ void SendDataHeader(char *cmd, int nRecs)
 	}
 		
 	SendMsg(msgToSend);
-	RecvMsg(msgRcvd);
-	if (strcmp(msgRcvd, "OK")) {
+	while ((ret = RecvMsg(msgToSend, msgRcvd)) != INTACT_QUIT && strcmp(msgRcvd, "OK"))
 		fprintf(stderr, "The message is supposed to be \"OK\", but received \"%s\"\n", msgRcvd);
-	}
+	/*if (ret != INTACT_QUIT && strcmp(msgRcvd, "OK")) {
+		fprintf(stderr, "The message is supposed to be \"OK\", but received \"%s\"\n", msgRcvd);
+	}*/
+	
+	return ret;
 }
 
 inline int GetServerBootupTime(int type)
@@ -3773,10 +3952,13 @@ inline int GetServerBootupTime(int type)
 int SendResInfoAll(int oldRESC)
 {
 	int i, nsTypes = g_systemInfo.numServTypes;
-	int numMsgSent = 0;
+	int numMsgSent = 0, ret;
 	
-	for (i = 0; i < nsTypes; i++)
-		numMsgSent += SendResInfoByType(i, NULL, oldRESC);
+	for (i = 0; i < nsTypes; i++) {
+		 ret = SendResInfoByType(i, NULL, oldRESC);
+		 if (ret == INTACT_QUIT) return ret;
+		numMsgSent += ret;
+	}
 		
 	return numMsgSent;
 }
@@ -3784,7 +3966,7 @@ int SendResInfoAll(int oldRESC)
 int SendResInfoByType(int type, ServerRes *resReq, int oldRESC)
 {
 	ServerTypeProp *sTypes = g_systemInfo.sTypes;
-	int i;
+	int i, ret;
 	int numMsgSent = 0;	
 	int limit = sTypes[type].limit;
 		
@@ -3797,7 +3979,9 @@ int SendResInfoByType(int type, ServerRes *resReq, int oldRESC)
 		// TODO: check the option of RESC explicitly
 		if (resReq && (!IsSuffAvailRes(resReq, &server->availCapa) || server->waiting))
 			continue;
-		numMsgSent += SendResInfoByServer(type, i, resReq, oldRESC);
+		 ret = SendResInfoByServer(type, i, resReq, oldRESC);
+		 if (ret == INTACT_QUIT) return ret;
+		 numMsgSent += ret;
 	}
 	
 	return numMsgSent;	
@@ -3836,6 +4020,7 @@ int SendResInfoByServer(int type, int id, ServerRes *resReq, int oldRESC)
 	Server *server = GetServer(type, id);
 	int availTime = UNKNOWN; // for RESC
 	int numWJobs, numRJobs;
+	int ret = TRUE; // 1 as the number of messages sent
 	char msgToSend[LARGE_BUF_SIZE];
 	char msgRcvd[LARGE_BUF_SIZE];
 	char curMsg[LARGE_BUF_SIZE];
@@ -3852,10 +4037,14 @@ int SendResInfoByServer(int type, int id, ServerRes *resReq, int oldRESC)
 				availTime, server->availCapa.cores, server->availCapa.mem, server->availCapa.disk);
 
 		SendMsg(msgToSend);
-		RecvMsg(msgRcvd);
-		if (strcmp(msgRcvd, "OK")) {
+		
+		while ((ret = RecvMsg(msgToSend, msgRcvd)) != INTACT_QUIT && strcmp(msgRcvd, "OK"))
 			fprintf(stderr, "The message is supposed to be \"OK\", but received \"%s\"\n", msgRcvd);
-		}
+	
+		/*ret = RecvMsg(msgToSend, msgRcvd);
+		if (ret != INTACT_QUIT && strcmp(msgRcvd, "OK")) {
+			fprintf(stderr, "The message is supposed to be \"OK\", but received \"%s\"\n", msgRcvd);
+		}*/
 	}
 	else { // GETS
 		numWJobs = CountJobs(*GetSchedJobList(JS_Waiting, server));
@@ -3879,7 +4068,7 @@ int SendResInfoByServer(int type, int id, ServerRes *resReq, int oldRESC)
 			strcat(g_bufferedMsg, curMsg);
 	}
 
-	return 1;
+	return ret;
 }
 
 int SendResInfoByAvail(ServerRes *resReq, int oldRESC)
@@ -4018,21 +4207,29 @@ void FinalizeResInfoBuf()
 	g_batchMsg[strlen(g_batchMsg) - 1] = '\0';	// to remove the last newline character
 }
 
-void SendBatchResInfo(int numMsgs)
+int SendBatchResInfo(int numMsgs)
 {
 	char msgRcvd[LARGE_BUF_SIZE];
+	int ret;
 
-	SendDataHeader("GETS", numMsgs);
+	ret = SendDataHeader("GETS", numMsgs);
+	if (ret != INTACT_QUIT) {
 
-	FinalizeResInfoBuf();
+		FinalizeResInfoBuf();
 
-	SendMsg(g_batchMsg);
-	RecvMsg(msgRcvd);
-	if (strcmp(msgRcvd, "OK"))
-		fprintf(stderr, "The message is supposed to be \"OK\", but received \"%s\"\n", msgRcvd);
+		SendMsg(g_batchMsg);
+		while ((ret = RecvMsg(g_batchMsg, msgRcvd)) != INTACT_QUIT && strcmp(msgRcvd, "OK"))
+			fprintf(stderr, "The message is supposed to be \"OK\", but received \"%s\"\n", msgRcvd);
+		/*
+		ret = RecvMsg(g_batchMsg, msgRcvd);
+		if (ret != INTACT_QUIT && strcmp(msgRcvd, "OK"))
+			fprintf(stderr, "The message is supposed to be \"OK\", but received \"%s\"\n", msgRcvd);*/
 
-	free(g_batchMsg);
-	g_batchMsg = NULL;
+		free(g_batchMsg);
+		g_batchMsg = NULL;
+	}
+	
+	return ret;
 }
 
 /*
@@ -4049,13 +4246,14 @@ int SendResInfo(char *msgRcvd)
 {
 	char *str, optStr[LARGE_BUF_SIZE];
 	int numMsgSent = 0;
+	int ret;
 	int oldRESC = !(strncmp(msgRcvd, "RESC", CMD_LENGTH));
 	
 	for (str = &msgRcvd[CMD_LENGTH]; !isalpha(*str) && *str != '\0'; str++); // skip spaces between "GETS" and the next search term
 	if (*str != '\0') {
 		if (!strncmp(str, getsOptions[GO_All].optstr, getsOptions[GO_All].optlen)) {
-			if (oldRESC) SendDataHeader("RESC", 1);
-			numMsgSent = SendResInfoAll(oldRESC);
+			if (oldRESC && (ret = SendDataHeader("RESC", 1)) == INTACT_QUIT) return ret;
+			if ((numMsgSent = SendResInfoAll(oldRESC)) == INTACT_QUIT) return INTACT_QUIT;
 		}
 		else
 		if (!strncmp(str, getsOptions[GO_Type].optstr, getsOptions[GO_Type].optlen)) {
@@ -4066,8 +4264,8 @@ int SendResInfo(char *msgRcvd)
 			if (numFields != 2) return UNDEFINED;
 			servType = FindResTypeByName(servTypeName);
 			if (servType == UNDEFINED) return UNDEFINED;
-			if (oldRESC) SendDataHeader("RESC", 1);
-			numMsgSent = SendResInfoByType(servType, NULL, oldRESC);
+			if (oldRESC && (ret = SendDataHeader("RESC", 1)) == INTACT_QUIT) return ret;
+			if ((numMsgSent = SendResInfoByType(servType, NULL, oldRESC)) == INTACT_QUIT) return INTACT_QUIT;
 		}
 		else
 		if (!strncmp(str, getsOptions[GO_One].optstr, getsOptions[GO_One].optlen)) {
@@ -4080,8 +4278,8 @@ int SendResInfo(char *msgRcvd)
 			if (servType == UNDEFINED) 
 			if (servType == UNDEFINED || sID < 0 || sID >= GetServerLimit(servType))
 				return UNDEFINED;
-			if (oldRESC) SendDataHeader("RESC", 1);
-			numMsgSent = SendResInfoByServer(servType, sID, NULL, oldRESC);
+			if (oldRESC && (ret = SendDataHeader("RESC", 1)) == INTACT_QUIT) return ret;
+			if ((numMsgSent = SendResInfoByServer(servType, sID, NULL, oldRESC)) == INTACT_QUIT) return INTACT_QUIT;
 		}
 		else
 		if (!strncmp(str, getsOptions[GO_Avail].optstr, getsOptions[GO_Avail].optlen)) {
@@ -4095,8 +4293,8 @@ int SendResInfo(char *msgRcvd)
 				IsOutOfBound(resReq.mem, MIN_MEM_PER_JOB_CORE, maxCapa->mem, limits[Mem_Limit].name) ||
 				IsOutOfBound(resReq.disk, MIN_DISK_PER_JOB_CORE, maxCapa->disk, limits[Disk_Limit].name))
 				return UNDEFINED;
-			if (oldRESC) SendDataHeader("RESC", 1);
-			numMsgSent = SendResInfoByAvail(&resReq, oldRESC);
+			if (oldRESC && (ret = SendDataHeader("RESC", 1)) == INTACT_QUIT) return ret;
+			if ((numMsgSent = SendResInfoByAvail(&resReq, oldRESC)) == INTACT_QUIT) return INTACT_QUIT;
 		}
 		else
 		if (!strncmp(str, getsOptions[GO_Capable].optstr, getsOptions[GO_Capable].optlen)) {
@@ -4110,8 +4308,8 @@ int SendResInfo(char *msgRcvd)
 				IsOutOfBound(resReq.mem, MIN_MEM_PER_JOB_CORE, maxCapa->mem, limits[Mem_Limit].name) ||
 				IsOutOfBound(resReq.disk, MIN_DISK_PER_JOB_CORE, maxCapa->disk, limits[Disk_Limit].name))
 				return UNDEFINED;
-			if (oldRESC) SendDataHeader("RESC", 1);
-			numMsgSent = SendResInfoByCapacity(&resReq, oldRESC);
+			if (oldRESC && (ret = SendDataHeader("RESC", 1)) == INTACT_QUIT) return ret;
+			if ((numMsgSent = SendResInfoByCapacity(&resReq, oldRESC)) == INTACT_QUIT) return INTACT_QUIT;
 		}
 		else
 		if (!strncmp(str, getsOptions[GO_Bounded].optstr, getsOptions[GO_Bounded].optlen)) {
@@ -4125,8 +4323,8 @@ int SendResInfo(char *msgRcvd)
 				IsOutOfBound(resReq.mem, MIN_MEM_PER_JOB_CORE, maxCapa->mem, limits[Mem_Limit].name) ||
 				IsOutOfBound(resReq.disk, MIN_DISK_PER_JOB_CORE, maxCapa->disk, limits[Disk_Limit].name))
 				return UNDEFINED;
-			if (oldRESC) SendDataHeader("RESC", 1);
-			numMsgSent = SendResInfoByBounded(&resReq, oldRESC);
+			if (oldRESC && (ret = SendDataHeader("RESC", 1)) == INTACT_QUIT) return ret;
+			if ((numMsgSent = SendResInfoByBounded(&resReq, oldRESC)) == INTACT_QUIT) return INTACT_QUIT;
 		}
 		else
 			return UNDEFINED;
@@ -4135,15 +4333,16 @@ int SendResInfo(char *msgRcvd)
 		return UNDEFINED;
 
 	if (!oldRESC)
-		SendBatchResInfo(numMsgSent);
+		ret = SendBatchResInfo(numMsgSent);
 
-	return numMsgSent;
+	return (ret != INTACT_QUIT ? numMsgSent : ret);
 }
 
 int SendJobsPerStateOnServer(SchedJob *sJob, int numMsgSent)
 {
 	char msgToSend[LARGE_BUF_SIZE];
 	char msgRcvd[LARGE_BUF_SIZE];
+	int ret = numMsgSent;
 	
 	for (; sJob; sJob = sJob->next) {
 		Job *job = sJob->job;
@@ -4154,14 +4353,17 @@ int SendJobsPerStateOnServer(SchedJob *sJob, int numMsgSent)
 		SendMsg(msgToSend);
 		numMsgSent++;
 		
-		RecvMsg(msgRcvd);
-		
-		if (strcmp(msgRcvd, "OK")) {
+		while ((ret = RecvMsg(msgToSend, msgRcvd)) != INTACT_QUIT && strcmp(msgRcvd, "OK"))
 			fprintf(stderr, "The message is supposed to be \"OK\", but received \"%s\"\n", msgRcvd);
-		}
+		
+		/*ret = RecvMsg(msgToSend, msgRcvd);
+		
+		if (ret != INTACT_QUIT && strcmp(msgRcvd, "OK")) {
+			fprintf(stderr, "The message is supposed to be \"OK\", but received \"%s\"\n", msgRcvd);
+		}*/
 	}
 	
-	return numMsgSent;
+	return (ret != INTACT_QUIT ? numMsgSent : ret);
 }
 
 int SendJobsOnServer(char *msgRcvd)
@@ -4169,6 +4371,7 @@ int SendJobsOnServer(char *msgRcvd)
 	char servTypeName[LARGE_BUF_SIZE];
 	int sID, servType;
 	int numFields, numMsgSent = 0;
+	int ret;
 	Server *server;
 
 	numFields = sscanf(msgRcvd, "LSTJ %s %d", servTypeName, &sID);
@@ -4177,13 +4380,15 @@ int SendJobsOnServer(char *msgRcvd)
 		IsOutOfBound(sID, 0, g_systemInfo.sTypes[servType].limit - 1, "Server ID"))
 		return UNDEFINED;
 
-	SendDataHeader("LSTJ", 1);
-	
+	ret = SendDataHeader("LSTJ", 1);
+	if (ret == INTACT_QUIT) return ret;
 	server = GetServer(servType, sID);
-	numMsgSent = SendJobsPerStateOnServer(server->running, numMsgSent); // Running jobs
-	numMsgSent = SendJobsPerStateOnServer(server->waiting, numMsgSent); // Waiting jobs
-	
-	return numMsgSent;
+	ret = SendJobsPerStateOnServer(server->running, numMsgSent); // Running jobs
+	if (ret == INTACT_QUIT) return ret;
+	numMsgSent += ret;
+	ret = SendJobsPerStateOnServer(server->waiting, numMsgSent); // Waiting jobs
+
+	return (ret != INTACT_QUIT ? numMsgSent + ret : ret);
 }
 
 
