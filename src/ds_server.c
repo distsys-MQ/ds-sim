@@ -44,7 +44,7 @@
 //#define DEBUG
 //#define FAIL_DEBUG
 
-#define VERSION						"19-September, 2020 @ MQ - client-server"
+#define VERSION						"13-October, 2020 @ MQ - client-server"
 #define DEVELOPERS					"Young Choon Lee, Young Ki Kim and Jayden King"
 
 // global variables
@@ -267,16 +267,19 @@ int main(int argc, char **argv)
 		//listen(g_fd, MAX_CONNECTIONS); //Listen for client connections. Maximum 10 connections will be permitted.
 		listen(g_fd, 1); //Listen for client connections. 
 	
+		PrintWelcomeMsg(argc, argv);
+		
 		//Now we start handling the connections.
 		if ((g_conn = accept(g_fd, (struct sockaddr *)NULL, NULL)) < 0) {
 			perror("accept"); 
 			GracefulExit();
 		}
 	}
+	else
+		PrintWelcomeMsg(argc, argv);
+
 	if (signal(SIGINT, SigHandler) == SIG_ERR)
 		fprintf(stderr, "\ncan't catch SIGINT\n");
-	
-	PrintWelcomeMsg(argc, argv);
 	
 	// read "HELO"
 	while (TRUE) {
