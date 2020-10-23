@@ -44,7 +44,7 @@
 //#define DEBUG
 //#define FAIL_DEBUG
 
-#define VERSION						"13-October, 2020 @ MQ - client-server"
+#define VERSION						"23-October, 2020 @ MQ - client-server"
 #define DEVELOPERS					"Young Choon Lee, Young Ki Kim and Jayden King"
 
 // global variables
@@ -2305,6 +2305,18 @@ int LoadJobs(xmlNode *node)
 	return ret;
 }
 
+int FindPrevSmallerCoreCnt(int curCoreCnt, int startSTInx)
+{
+	int i, cores;
+	int nsTypes = g_systemInfo.numServTypes;
+	ServerTypeProp *sTypes = g_systemInfo.sTypes;
+	
+	for (i = startSTInx; i >= 0 && sTypes[i].capacity.cores >= curCoreCnt; i--);
+	// i < 0 means same core count with all previous server types of current server type w/ curCoreCnt
+	
+	return (i < 0 ? 0 : sTypes[i].capacity.cores);
+}
+
 int ComputeJobCoreReq(ServerRes *maxCapa, int loadTooLow)
 {
 	int i, r, rMax, minCores, cores;
@@ -2312,14 +2324,24 @@ int ComputeJobCoreReq(ServerRes *maxCapa, int loadTooLow)
 	ServerTypeProp *sTypes = g_systemInfo.sTypes;
 	int *jobGr = g_workloadInfo.jobGr;
 
-	if (loadTooLow)
+	if (loadTooLow || nsTypes == 1) {
 		cores = (maxCapa->cores / 2) + rand() % (maxCapa->cores / 2) + 1;
-	else
+	}
+	else // two or more server types
 	{
 		r = rand() % 100;	// out of 100%
-		for (i = 0, rMax = jobGr[i]; i < nsTypes && r >= rMax; i++, rMax += jobGr[i]);
+		for (i = 0, rMax = jobGr[i]; i < nsTypes-1 && r >= rMax; i++, rMax += jobGr[i]);
 		
-		minCores = i == 0 ? 0 : sTypes[i-1].capacity.cores;
+		if (i == 0) 
+			minCores = 0;
+		else
+		if (i < nsTypes-1)
+			//minCores = sTypes[i-1].capacity.cores;
+			minCores = FindPrevSmallerCoreCnt(sTypes[i].capacity.cores, i-1);
+		else	// i == nsTypes-1, i.e., last server type
+			//minCores = sTypes[i-2].capacity.cores; // remember >= 2 server types
+			minCores = FindPrevSmallerCoreCnt(sTypes[i].capacity.cores, i-2);
+
 		cores = minCores + rand() % (sTypes[i].capacity.cores - minCores) + 1;
 	}
 	
@@ -2619,13 +2641,13 @@ int ValidateSystemInfo()
 		// current resource requirement calculation for job is based on MIN_MEM_PER_JOB_CORE (100MB) * 2
 		if (capacity->mem < capacity->cores * (MIN_MEM_PER_JOB_CORE * 2)) {
 			int minMem = MIN_MEM_PER_JOB_CORE * 2;
-			fprintf(stderr, "Insufficient memory (min/core: %d)!\n", minMem);
+			fprintf(stderr, "Insufficient memory (min/core: %d for server type: %s)!\n", minMem, sType->name);
 			return FALSE;
 		}
 		else
-		if (capacity->disk < capacity->cores * (MIN_DISK_PER_CORE * 2)) {
-			int minDisk = MIN_DISK_PER_CORE * 2;
-			fprintf(stderr, "Insufficient memory (min/core: %d)!\n", minDisk);
+		if (capacity->disk < capacity->cores * (MIN_DISK_PER_JOB_CORE * 2)) {
+			int minDisk = MIN_DISK_PER_JOB_CORE * 2;
+			fprintf(stderr, "Insufficient disk space (min/core: %d for server type: %s)!\n", minDisk, sType->name);
 			return FALSE;
 		}
 		

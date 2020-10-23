@@ -48,6 +48,7 @@ inline int GetJobType();
 int ReadJobs(char *jobFileName);
 int LoadJobs(xmlNode *node);
 int GetJobTypeByName(char *);
+int FindPrevSmallerCoreCnt(int curCoreCnt, int startSTInx);
 int ComputeJobCoreReq(ServerRes *maxCapa, int loadTooLow);
 void GenerateJobResReq(Job *job, ServerRes *maxCapa, int curLoad, int targetLoad, int loadTooLow);
 void GenerateJobRuntimes(Job *job, int jType, JobTypeProp *jobTypes);
