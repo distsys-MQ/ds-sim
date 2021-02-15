@@ -44,7 +44,7 @@
 //#define DEBUG
 //#define FAIL_DEBUG
 
-#define VERSION						"23-October, 2020 @ MQ - client-server"
+#define VERSION						"16-February, 2021 @ MQ - client-server"
 #define DEVELOPERS					"Young Choon Lee, Young Ki Kim and Jayden King"
 
 // global variables
@@ -103,7 +103,7 @@ SimOption simOpts[] = {
 					{"d(uration): simulation duration/end time", 'd', TRUE, "n (in seconds)", FALSE},
 					{"f(ailure): failure distribution model (e.g., teragrid, nd07cpu and websites02)", 'f', TRUE, "teragrid|nd07cpu|websits02|g5k06|pl05|ldns04", FALSE},
 					{"g(ranularity): time granularity for resource failures", 'g', TRUE, "n (in second)", FALSE},
-					{"h(elp): usage", 'h', TRUE, "all|usage|limits|states", FALSE},
+					{"h(elp): usage", 'h', TRUE, "all|usage|limits|stats", FALSE},
 					{"i(nteractive): run simulation in the interactive mode", 'i', FALSE, "", FALSE},
 					{"j(ob): set job count", 'j', TRUE, "n (max #jobs to generate)", FALSE},
 					{"l(imit of #servers): the number of servers (uniform to all server types)", 'l', TRUE, "n", FALSE},
