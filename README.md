@@ -4,6 +4,10 @@ ds-sim is a discrete-event simulator that has been developed primarily for lever
 
 ---
 ## How to run a simulation
-1. run server `$ ds-server [-c configuration] [-v brief|all|stats] [OPTIONS]`
-2. run client `$ ds-client [-a algorithm] [-f]`
+1. run server `$ ds-server [OPTION]...`
+2. run client `$ ds-client [-a algorithm] [OPTION]...`
+
+## Usage
+`$ ds-server -c ds-config01.xml -v brief`
+`$ ds-client -a bf`
 
