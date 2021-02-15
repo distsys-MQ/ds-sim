@@ -9,5 +9,6 @@ ds-sim is a discrete-event simulator that has been developed primarily for lever
 
 ## Usage
 `$ ds-server -c ds-config01.xml -v brief`
+
 `$ ds-client -a bf`
 
