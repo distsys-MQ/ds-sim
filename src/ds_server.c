@@ -44,7 +44,7 @@
 //#define DEBUG
 //#define FAIL_DEBUG
 
-#define VERSION						"16-February, 2021 @ MQ - client-server"
+#define VERSION						"17-February, 2021 @ MQ - client-server"
 #define DEVELOPERS					"Young Choon Lee, Young Ki Kim and Jayden King"
 
 // global variables
@@ -4229,7 +4229,8 @@ void FinalizeResInfoBuf()
 		g_bufferedMsg[0] = '\0';
 	}
 
-	g_batchMsg[strlen(g_batchMsg) - 1] = '\0';	// to remove the last newline character
+	if (g_batchMsg)
+		g_batchMsg[strlen(g_batchMsg) - 1] = '\0';	// to remove the last newline character
 }
 
 int SendBatchResInfo(int numMsgs)
@@ -4238,7 +4239,7 @@ int SendBatchResInfo(int numMsgs)
 	int ret;
 
 	ret = SendDataHeader("GETS", numMsgs);
-	if (ret != INTACT_QUIT) {
+	if (ret != INTACT_QUIT && numMsgs) {
 
 		FinalizeResInfoBuf();
 
@@ -5136,3 +5137,4 @@ void FreeAll()
 	FreeWorkloadInfo();
 	xmlCleanupParser();
 }
+
