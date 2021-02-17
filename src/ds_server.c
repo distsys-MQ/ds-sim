@@ -44,7 +44,7 @@
 //#define DEBUG
 //#define FAIL_DEBUG
 
-#define VERSION						"17-February, 2021 @ MQ - client-server"
+#define VERSION						"18-February, 2021 @ MQ - client-server"
 #define DEVELOPERS					"Young Choon Lee, Young Ki Kim and Jayden King"
 
 // global variables
@@ -241,8 +241,6 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	CompleteConfig();
-
 	if (!g_sConfig.configFile) {	// configuration file not specified
 		GenerateSystemInfo();
 		if (!g_sConfig.jobFile)
@@ -253,6 +251,8 @@ int main(int argc, char **argv)
 		FreeAll();
 		return 1;
 	}
+	
+	CompleteConfig();
 
 	if (!simOpts[SO_Interactive].used) {
 		serv.sin_family = AF_INET;
@@ -967,9 +967,8 @@ int ConfigSim(int argc, char **argv)
 			case 'f':	// resource failure
 					if (!g_systemInfo.rFailT)
 						CreateResFailTrace();
-					
+
 					g_systemInfo.rFailT->fModel = GetFailureModel(optarg);
-					
 					if (g_systemInfo.rFailT->fModel == END_FAILURE_MODEL) {
 						fprintf(stderr, "Invalid resource failure model!\n");
 						return FALSE;
@@ -1137,7 +1136,7 @@ void CreateResFailureLists()
 
 	for (i = 0; i < nsTypes; i++) {
 		int limit = sTypes[i].limit;
-	
+
 		for (j = 0; j < limit; j++) {
 			Server *server = &servers[i][j];
 			server->failInfo.fIndices = (int *) malloc(sizeof(int) * actNumFailures);
@@ -1780,7 +1779,7 @@ int LoadSimConfig(xmlNode *node)
 				}
 				g_systemInfo.numServTypes = 0;
 				CreateServerTypes(limits[SType_Limit].max);
-				
+
 				// resource failures need to be dealt with after obtaining all server information 
 				// as failures are generated considering servers specified in the configuration, and 
 				if (((char *)xmlGetProp(curNode, (xmlChar *)"failureModel") || 
@@ -1788,6 +1787,13 @@ int LoadSimConfig(xmlNode *node)
 					(char *)xmlGetProp(curNode, (xmlChar *)"failureFile")) &&
 					!(g_systemInfo.rFailT))
 					CreateResFailTrace();
+				else if (((char *)xmlGetProp(curNode, (xmlChar *)"failureModel") || 
+					(char *)xmlGetProp(curNode, (xmlChar *)"failureTimeGrain") ||
+					(char *)xmlGetProp(curNode, (xmlChar *)"failureFile")) &&
+					g_systemInfo.rFailT) {
+					fprintf(stderr, "The '-f' command line option is used already!\n");
+					return FALSE;
+				}
 
 				if ((char *)xmlGetProp(curNode, (xmlChar *)"failureModel") && g_systemInfo.rFailT->fModel == UNDEFINED) {
 					g_systemInfo.rFailT->fModel = GetFailureModel((char *)xmlGetProp(curNode, (xmlChar *)"failureModel"));
@@ -1997,7 +2003,6 @@ int ReadSimConfig(char *filename)
 			if ((ret = ValidateJobRates()))
 				g_workloadInfo.jobs = GenerateJobs();
 		}
-
 		if (g_systemInfo.rFailT) {
 			if (g_systemInfo.rFailT->fModel > UNKNOWN && 
 				g_systemInfo.rFailT->fModel < END_FAILURE_MODEL) 
