@@ -5,7 +5,7 @@
 	<type name="short" minRunTime="11" maxRunTime="180" populationRate="40" />
 	<type name="medium" minRunTime="301" maxRunTime="900" populationRate="30" />
 	<type name="long" minRunTime="1801" maxRunTime="43200" populationRate="10" />
-	<type name="perminent" minRunTime="3601" maxRunTime="100000" populationRate="5" />
+	<type name="verylong" minRunTime="3601" maxRunTime="100000" populationRate="5" />
 	<job id="0" type="short" submitTime="12" estRunTime="76" cores="13" memory="15300" disk="33000" />
 	<job id="1" type="short" submitTime="17" estRunTime="133" cores="2" memory="1900" disk="3100" />
 	<job id="2" type="medium" submitTime="60" estRunTime="346" cores="2" memory="700" disk="1300" />
@@ -51,8 +51,8 @@
 	<job id="42" type="instant" submitTime="247" estRunTime="17" cores="5" memory="3500" disk="6800" />
 	<job id="43" type="short" submitTime="247" estRunTime="263" cores="1" memory="600" disk="1500" />
 	<job id="44" type="short" submitTime="247" estRunTime="45" cores="9" memory="6900" disk="17800" />
-	<job id="45" type="perminent" submitTime="247" estRunTime="5366" cores="13" memory="24500" disk="8300" />
-	<job id="46" type="perminent" submitTime="259" estRunTime="122559" cores="2" memory="300" disk="4100" />
+	<job id="45" type="verylong" submitTime="247" estRunTime="5366" cores="13" memory="24500" disk="8300" />
+	<job id="46" type="verylong" submitTime="259" estRunTime="122559" cores="2" memory="300" disk="4100" />
 	<job id="47" type="short" submitTime="270" estRunTime="86" cores="5" memory="500" disk="5400" />
 	<job id="48" type="short" submitTime="283" estRunTime="47" cores="1" memory="100" disk="1500" />
 	<job id="49" type="short" submitTime="296" estRunTime="241" cores="3" memory="1100" disk="3800" />
@@ -62,7 +62,7 @@
 	<job id="53" type="medium" submitTime="351" estRunTime="763" cores="2" memory="1300" disk="900" />
 	<job id="54" type="short" submitTime="352" estRunTime="165" cores="1" memory="600" disk="1100" />
 	<job id="55" type="medium" submitTime="377" estRunTime="930" cores="6" memory="1400" disk="6800" />
-	<job id="56" type="perminent" submitTime="379" estRunTime="2695" cores="1" memory="700" disk="1700" />
+	<job id="56" type="verylong" submitTime="379" estRunTime="2695" cores="1" memory="700" disk="1700" />
 	<job id="57" type="short" submitTime="390" estRunTime="154" cores="1" memory="900" disk="1000" />
 	<job id="58" type="instant" submitTime="440" estRunTime="15" cores="5" memory="4000" disk="3700" />
 	<job id="59" type="short" submitTime="475" estRunTime="88" cores="2" memory="2100" disk="3800" />
@@ -86,7 +86,7 @@
 	<job id="77" type="short" submitTime="1348" estRunTime="222" cores="5" memory="4100" disk="7600" />
 	<job id="78" type="short" submitTime="1385" estRunTime="60" cores="2" memory="300" disk="2300" />
 	<job id="79" type="instant" submitTime="1446" estRunTime="8" cores="3" memory="2400" disk="5100" />
-	<job id="80" type="perminent" submitTime="1472" estRunTime="32806" cores="12" memory="21800" disk="46400" />
+	<job id="80" type="verylong" submitTime="1472" estRunTime="32806" cores="12" memory="21800" disk="46400" />
 	<job id="81" type="long" submitTime="1512" estRunTime="6356" cores="1" memory="500" disk="700" />
 	<job id="82" type="instant" submitTime="1549" estRunTime="31" cores="1" memory="900" disk="100" />
 	<job id="83" type="short" submitTime="1580" estRunTime="19" cores="8" memory="1700" disk="9100" />
@@ -117,7 +117,7 @@
 	<job id="108" type="short" submitTime="1688" estRunTime="217" cores="2" memory="1300" disk="2900" />
 	<job id="109" type="short" submitTime="1692" estRunTime="62" cores="1" memory="600" disk="1400" />
 	<job id="110" type="medium" submitTime="1695" estRunTime="371" cores="1" memory="1000" disk="1500" />
-	<job id="111" type="perminent" submitTime="1697" estRunTime="66976" cores="1" memory="200" disk="400" />
+	<job id="111" type="verylong" submitTime="1697" estRunTime="66976" cores="1" memory="200" disk="400" />
 	<job id="112" type="short" submitTime="1700" estRunTime="96" cores="1" memory="900" disk="1600" />
 	<job id="113" type="medium" submitTime="1703" estRunTime="51" cores="1" memory="400" disk="900" />
 	<job id="114" type="long" submitTime="1705" estRunTime="53746" cores="1" memory="600" disk="300" />
@@ -136,7 +136,7 @@
 	<job id="127" type="short" submitTime="1734" estRunTime="78" cores="1" memory="800" disk="1200" />
 	<job id="128" type="medium" submitTime="1735" estRunTime="582" cores="2" memory="200" disk="2400" />
 	<job id="129" type="short" submitTime="1736" estRunTime="69" cores="7" memory="4500" disk="6700" />
-	<job id="130" type="perminent" submitTime="1736" estRunTime="70304" cores="12" memory="10600" disk="45000" />
+	<job id="130" type="verylong" submitTime="1736" estRunTime="70304" cores="12" memory="10600" disk="45000" />
 	<job id="131" type="long" submitTime="1736" estRunTime="2243" cores="10" memory="15400" disk="33600" />
 	<job id="132" type="medium" submitTime="1736" estRunTime="1644" cores="12" memory="12400" disk="18500" />
 	<job id="133" type="short" submitTime="1771" estRunTime="192" cores="2" memory="900" disk="500" />
@@ -163,7 +163,7 @@
 	<job id="154" type="short" submitTime="2839" estRunTime="300" cores="1" memory="300" disk="500" />
 	<job id="155" type="medium" submitTime="2846" estRunTime="579" cores="1" memory="600" disk="800" />
 	<job id="156" type="short" submitTime="2942" estRunTime="221" cores="15" memory="7300" disk="26300" />
-	<job id="157" type="perminent" submitTime="3022" estRunTime="8723" cores="7" memory="6200" disk="2900" />
+	<job id="157" type="verylong" submitTime="3022" estRunTime="8723" cores="7" memory="6200" disk="2900" />
 	<job id="158" type="short" submitTime="3067" estRunTime="80" cores="7" memory="1100" disk="700" />
 	<job id="159" type="medium" submitTime="3172" estRunTime="423" cores="2" memory="600" disk="1100" />
 	<job id="160" type="short" submitTime="3254" estRunTime="57" cores="12" memory="23700" disk="40800" />
@@ -192,14 +192,14 @@
 	<job id="183" type="long" submitTime="5433" estRunTime="63690" cores="1" memory="300" disk="900" />
 	<job id="184" type="short" submitTime="5496" estRunTime="22" cores="6" memory="1000" disk="3600" />
 	<job id="185" type="medium" submitTime="5733" estRunTime="881" cores="3" memory="2600" disk="1500" />
-	<job id="186" type="perminent" submitTime="5942" estRunTime="121573" cores="1" memory="300" disk="1400" />
+	<job id="186" type="verylong" submitTime="5942" estRunTime="121573" cores="1" memory="300" disk="1400" />
 	<job id="187" type="long" submitTime="6220" estRunTime="55106" cores="1" memory="900" disk="1600" />
 	<job id="188" type="instant" submitTime="6283" estRunTime="17" cores="3" memory="3000" disk="6100" />
 	<job id="189" type="medium" submitTime="6368" estRunTime="433" cores="3" memory="2600" disk="6000" />
 	<job id="190" type="medium" submitTime="6398" estRunTime="1044" cores="1" memory="900" disk="1600" />
 	<job id="191" type="short" submitTime="6456" estRunTime="15" cores="1" memory="800" disk="1100" />
 	<job id="192" type="short" submitTime="6497" estRunTime="14" cores="1" memory="900" disk="1700" />
-	<job id="193" type="perminent" submitTime="6791" estRunTime="55178" cores="1" memory="600" disk="1700" />
+	<job id="193" type="verylong" submitTime="6791" estRunTime="55178" cores="1" memory="600" disk="1700" />
 	<job id="194" type="short" submitTime="6960" estRunTime="196" cores="1" memory="600" disk="800" />
 	<job id="195" type="short" submitTime="7030" estRunTime="13" cores="1" memory="500" disk="1700" />
 	<job id="196" type="medium" submitTime="7051" estRunTime="459" cores="5" memory="3200" disk="5300" />
@@ -214,7 +214,7 @@
 	<job id="205" type="short" submitTime="8256" estRunTime="29" cores="2" memory="1800" disk="1800" />
 	<job id="206" type="medium" submitTime="8514" estRunTime="336" cores="1" memory="1000" disk="800" />
 	<job id="207" type="short" submitTime="8847" estRunTime="52" cores="1" memory="800" disk="100" />
-	<job id="208" type="perminent" submitTime="9027" estRunTime="31397" cores="2" memory="1500" disk="900" />
+	<job id="208" type="verylong" submitTime="9027" estRunTime="31397" cores="2" memory="1500" disk="900" />
 	<job id="209" type="medium" submitTime="9434" estRunTime="920" cores="2" memory="1300" disk="2700" />
 	<job id="210" type="medium" submitTime="9636" estRunTime="663" cores="1" memory="1000" disk="300" />
 	<job id="211" type="long" submitTime="9887" estRunTime="8927" cores="1" memory="200" disk="1000" />
@@ -251,7 +251,7 @@
 	<job id="242" type="medium" submitTime="17837" estRunTime="35" cores="11" memory="16600" disk="9100" />
 	<job id="243" type="short" submitTime="18390" estRunTime="22" cores="3" memory="1400" disk="5400" />
 	<job id="244" type="long" submitTime="18649" estRunTime="3399" cores="1" memory="300" disk="1300" />
-	<job id="245" type="perminent" submitTime="19063" estRunTime="106531" cores="1" memory="1000" disk="600" />
+	<job id="245" type="verylong" submitTime="19063" estRunTime="106531" cores="1" memory="1000" disk="600" />
 	<job id="246" type="short" submitTime="19576" estRunTime="156" cores="2" memory="900" disk="1600" />
 	<job id="247" type="short" submitTime="19817" estRunTime="6" cores="6" memory="1400" disk="11400" />
 	<job id="248" type="medium" submitTime="19891" estRunTime="85" cores="1" memory="1000" disk="300" />
@@ -332,7 +332,7 @@
 	<job id="323" type="short" submitTime="46292" estRunTime="1" cores="2" memory="200" disk="1200" />
 	<job id="324" type="instant" submitTime="46292" estRunTime="13" cores="1" memory="1000" disk="1100" />
 	<job id="325" type="short" submitTime="46292" estRunTime="89" cores="2" memory="1300" disk="500" />
-	<job id="326" type="perminent" submitTime="46295" estRunTime="25416" cores="3" memory="700" disk="2600" />
+	<job id="326" type="verylong" submitTime="46295" estRunTime="25416" cores="3" memory="700" disk="2600" />
 	<job id="327" type="short" submitTime="46297" estRunTime="55" cores="2" memory="400" disk="800" />
 	<job id="328" type="medium" submitTime="46300" estRunTime="850" cores="1" memory="800" disk="1900" />
 	<job id="329" type="long" submitTime="46302" estRunTime="15906" cores="1" memory="600" disk="600" />
@@ -351,7 +351,7 @@
 	<job id="342" type="medium" submitTime="46334" estRunTime="766" cores="1" memory="500" disk="1000" />
 	<job id="343" type="short" submitTime="46353" estRunTime="29" cores="1" memory="400" disk="1200" />
 	<job id="344" type="short" submitTime="46363" estRunTime="63" cores="3" memory="2700" disk="2400" />
-	<job id="345" type="perminent" submitTime="46378" estRunTime="80033" cores="2" memory="600" disk="3700" />
+	<job id="345" type="verylong" submitTime="46378" estRunTime="80033" cores="2" memory="600" disk="3700" />
 	<job id="346" type="short" submitTime="46415" estRunTime="19" cores="4" memory="1600" disk="4300" />
 	<job id="347" type="short" submitTime="46436" estRunTime="23" cores="1" memory="300" disk="1300" />
 	<job id="348" type="medium" submitTime="46482" estRunTime="559" cores="1" memory="1000" disk="1500" />
@@ -362,7 +362,7 @@
 	<job id="353" type="short" submitTime="46628" estRunTime="113" cores="4" memory="2500" disk="3800" />
 	<job id="354" type="instant" submitTime="46695" estRunTime="7" cores="4" memory="700" disk="1800" />
 	<job id="355" type="long" submitTime="46765" estRunTime="12602" cores="2" memory="500" disk="3000" />
-	<job id="356" type="perminent" submitTime="46817" estRunTime="149475" cores="5" memory="1800" disk="2100" />
+	<job id="356" type="verylong" submitTime="46817" estRunTime="149475" cores="5" memory="1800" disk="2100" />
 	<job id="357" type="short" submitTime="46859" estRunTime="83" cores="1" memory="1000" disk="1100" />
 	<job id="358" type="medium" submitTime="46901" estRunTime="1311" cores="3" memory="2800" disk="4700" />
 	<job id="359" type="short" submitTime="46909" estRunTime="150" cores="5" memory="2200" disk="7200" />
@@ -372,11 +372,11 @@
 	<job id="363" type="medium" submitTime="47021" estRunTime="401" cores="6" memory="4900" disk="700" />
 	<job id="364" type="instant" submitTime="47110" estRunTime="15" cores="2" memory="200" disk="2300" />
 	<job id="365" type="medium" submitTime="47163" estRunTime="1387" cores="1" memory="400" disk="1700" />
-	<job id="366" type="perminent" submitTime="47207" estRunTime="1116" cores="2" memory="1500" disk="3000" />
+	<job id="366" type="verylong" submitTime="47207" estRunTime="1116" cores="2" memory="1500" disk="3000" />
 	<job id="367" type="short" submitTime="47208" estRunTime="226" cores="1" memory="200" disk="1200" />
 	<job id="368" type="short" submitTime="47266" estRunTime="14" cores="2" memory="1600" disk="3700" />
 	<job id="369" type="instant" submitTime="47369" estRunTime="7" cores="4" memory="3100" disk="7700" />
-	<job id="370" type="perminent" submitTime="47499" estRunTime="82616" cores="1" memory="900" disk="900" />
+	<job id="370" type="verylong" submitTime="47499" estRunTime="82616" cores="1" memory="900" disk="900" />
 	<job id="371" type="short" submitTime="47528" estRunTime="75" cores="1" memory="100" disk="1000" />
 	<job id="372" type="long" submitTime="47529" estRunTime="25152" cores="15" memory="24800" disk="33200" />
 	<job id="373" type="medium" submitTime="47598" estRunTime="883" cores="7" memory="6000" disk="5200" />
@@ -407,7 +407,7 @@
 	<job id="398" type="short" submitTime="50142" estRunTime="25" cores="2" memory="200" disk="3900" />
 	<job id="399" type="instant" submitTime="50253" estRunTime="3" cores="6" memory="6000" disk="5200" />
 	<job id="400" type="instant" submitTime="50286" estRunTime="17" cores="2" memory="1400" disk="1000" />
-	<job id="401" type="perminent" submitTime="50571" estRunTime="11651" cores="3" memory="1400" disk="1800" />
+	<job id="401" type="verylong" submitTime="50571" estRunTime="11651" cores="3" memory="1400" disk="1800" />
 	<job id="402" type="short" submitTime="50843" estRunTime="25" cores="1" memory="500" disk="1100" />
 	<job id="403" type="short" submitTime="51019" estRunTime="159" cores="1" memory="600" disk="1200" />
 	<job id="404" type="short" submitTime="51035" estRunTime="11" cores="2" memory="1600" disk="1800" />
@@ -436,7 +436,7 @@
 	<job id="427" type="instant" submitTime="55670" estRunTime="20" cores="6" memory="600" disk="9900" />
 	<job id="428" type="instant" submitTime="55730" estRunTime="3" cores="2" memory="1000" disk="3200" />
 	<job id="429" type="long" submitTime="55981" estRunTime="44349" cores="6" memory="3100" disk="7300" />
-	<job id="430" type="perminent" submitTime="56116" estRunTime="60751" cores="8" memory="3900" disk="10000" />
+	<job id="430" type="verylong" submitTime="56116" estRunTime="60751" cores="8" memory="3900" disk="10000" />
 	<job id="431" type="medium" submitTime="56132" estRunTime="367" cores="1" memory="600" disk="1000" />
 	<job id="432" type="short" submitTime="56312" estRunTime="178" cores="8" memory="3000" disk="9300" />
 	<job id="433" type="medium" submitTime="56568" estRunTime="449" cores="10" memory="15600" disk="10100" />
@@ -447,7 +447,7 @@
 	<job id="438" type="short" submitTime="57311" estRunTime="71" cores="1" memory="1000" disk="1100" />
 	<job id="439" type="long" submitTime="57455" estRunTime="14214" cores="5" memory="1700" disk="7700" />
 	<job id="440" type="medium" submitTime="57603" estRunTime="198" cores="2" memory="200" disk="1400" />
-	<job id="441" type="perminent" submitTime="57870" estRunTime="54390" cores="2" memory="300" disk="3500" />
+	<job id="441" type="verylong" submitTime="57870" estRunTime="54390" cores="2" memory="300" disk="3500" />
 	<job id="442" type="short" submitTime="58022" estRunTime="231" cores="2" memory="1900" disk="3900" />
 	<job id="443" type="short" submitTime="58126" estRunTime="5" cores="3" memory="300" disk="3200" />
 	<job id="444" type="medium" submitTime="58368" estRunTime="903" cores="2" memory="1900" disk="3100" />
@@ -470,7 +470,7 @@
 	<job id="461" type="long" submitTime="62492" estRunTime="8330" cores="2" memory="600" disk="1000" />
 	<job id="462" type="medium" submitTime="62885" estRunTime="174" cores="3" memory="2100" disk="600" />
 	<job id="463" type="medium" submitTime="62908" estRunTime="887" cores="4" memory="3500" disk="7600" />
-	<job id="464" type="perminent" submitTime="63049" estRunTime="29249" cores="1" memory="900" disk="1000" />
+	<job id="464" type="verylong" submitTime="63049" estRunTime="29249" cores="1" memory="900" disk="1000" />
 	<job id="465" type="medium" submitTime="63139" estRunTime="1218" cores="1" memory="800" disk="1300" />
 	<job id="466" type="short" submitTime="63354" estRunTime="179" cores="3" memory="1200" disk="5800" />
 	<job id="467" type="instant" submitTime="63852" estRunTime="1" cores="1" memory="300" disk="1400" />
@@ -483,7 +483,7 @@
 	<job id="474" type="medium" submitTime="66142" estRunTime="896" cores="16" memory="33500" disk="54800" />
 	<job id="475" type="short" submitTime="66234" estRunTime="206" cores="2" memory="200" disk="500" />
 	<job id="476" type="short" submitTime="66913" estRunTime="14" cores="8" memory="8000" disk="11400" />
-	<job id="477" type="perminent" submitTime="67374" estRunTime="30977" cores="1" memory="900" disk="700" />
+	<job id="477" type="verylong" submitTime="67374" estRunTime="30977" cores="1" memory="900" disk="700" />
 	<job id="478" type="short" submitTime="67599" estRunTime="100" cores="2" memory="600" disk="1200" />
 	<job id="479" type="long" submitTime="68091" estRunTime="25401" cores="4" memory="1300" disk="6900" />
 	<job id="480" type="short" submitTime="68368" estRunTime="182" cores="6" memory="600" disk="8400" />
@@ -494,7 +494,7 @@
 	<job id="485" type="medium" submitTime="70227" estRunTime="229" cores="4" memory="2200" disk="5600" />
 	<job id="486" type="medium" submitTime="70424" estRunTime="14" cores="1" memory="200" disk="1400" />
 	<job id="487" type="short" submitTime="70531" estRunTime="10" cores="1" memory="300" disk="1300" />
-	<job id="488" type="perminent" submitTime="71163" estRunTime="9177" cores="1" memory="300" disk="1200" />
+	<job id="488" type="verylong" submitTime="71163" estRunTime="9177" cores="1" memory="300" disk="1200" />
 	<job id="489" type="medium" submitTime="71224" estRunTime="87" cores="1" memory="1000" disk="1900" />
 	<job id="490" type="short" submitTime="71719" estRunTime="30" cores="2" memory="200" disk="2700" />
 	<job id="491" type="short" submitTime="72137" estRunTime="114" cores="7" memory="1200" disk="4700" />

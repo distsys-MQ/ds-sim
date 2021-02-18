@@ -13,7 +13,7 @@
 	<job type="short" minRunTime="11" maxRunTime="180" populationRate="40" />
 	<job type="medium" minRunTime="301" maxRunTime="900" populationRate="30" />
 	<job type="long" minRunTime="1801" maxRunTime="43200" populationRate="10" />
-	<job type="perminent" minRunTime="3601" maxRunTime="100000" populationRate="5" />
+	<job type="verylong" minRunTime="3601" maxRunTime="100000" populationRate="5" />
   </jobs>
   <workload type="light" minLoad="10" maxLoad="30" />
   <termination>
