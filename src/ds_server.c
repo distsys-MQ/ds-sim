@@ -44,7 +44,7 @@
 //#define DEBUG
 //#define FAIL_DEBUG
 
-#define VERSION						"18-February, 2021 @ MQ - client-server"
+#define VERSION						"19-March, 2021 @ MQ - client-server"
 #define DEVELOPERS					"Young Choon Lee, Young Ki Kim and Jayden King"
 
 // global variables
@@ -440,8 +440,8 @@ void InitSim()
 	g_sConfig.jobFileName[0] = '\0';
 	g_sConfig.rseed = 0;
 	g_sConfig.resLimit = 0;
-	g_sConfig.termination.simEndTime = 
-	g_sConfig.termination.maxJobCnt = 0;
+	g_sConfig.termination.simEndTime = limits[SEnd_Limit].max;
+	g_sConfig.termination.maxJobCnt = limits[JCnt_Limit].def;
 	g_sConfig.regGETSRecLen = 
 	g_sConfig.failGETSRecLen = 
 	g_sConfig.LSTJRecLen = 0;
@@ -2568,7 +2568,7 @@ inline int GetNumLoadTransitions()
 void GenerateWorkload()
 {
 	int i;
-	
+
 	g_workloadInfo.name = strdup("alternating");	// by default
 	g_workloadInfo.minLoad = limits[WMinLoad_Limit].min + rand() % limits[WMinLoad_Limit].max;
 	g_workloadInfo.maxLoad = g_workloadInfo.minLoad + rand() % (limits[WMaxLoad_Limit].max - g_workloadInfo.minLoad + 1);
@@ -2587,6 +2587,7 @@ void GenerateWorkload()
 		jType->max = defaultJobTypes[i].max;
 		jType->rate = defaultJobTypes[i].rate;
 	}
+
 	g_workloadInfo.jobs = GenerateJobs();
 }
 
@@ -4967,9 +4968,10 @@ void PrintStats()
 	long int totalEffUsage = 0;
 	float totalUtil = 0;
 	float grandTotal = 0;
+	float avgUtil = 0, avgEffUsage = 0;
 	long totalWT = 0;
 	long totalRT = 0;
-	long avgTT = 0;
+	long avgWT = 0, avgET = 0, avgTT = 0;
 	int numSJobs = 0;
 	int numFJobs = 0;
 	
@@ -5047,13 +5049,21 @@ void PrintStats()
 	printf("# ==================================== [ Summary ] ====================================\n");
 	printf("# actual simulation end time: %u, #jobs: %d (failed %d times)\n", 
 		g_ss.actSimEndTime, numSJobs, numFJobs);
-	//printf("# total #servers used: %d, avg utilisation: %.2f and total cost: $%.2f\n", 
-	//	totalServCnt, totalUtil / totalServCnt * 100, grandTotal);
+	
+	//printf("# total #servers used: %d, avg util: %.2f%% (ef. usage: %.2f%%), total cost: $%.2f\n", 
+	//	totalServCnt, totalUtil / totalServCnt * 100, (float)totalEffUsage / totalUsage * 100, grandTotal);
+	
+	avgUtil = totalServCnt ? totalUtil / totalServCnt * 100 : 0;
+	avgEffUsage = totalUsage? (float)totalEffUsage / totalUsage * 100 : 0;
 	printf("# total #servers used: %d, avg util: %.2f%% (ef. usage: %.2f%%), total cost: $%.2f\n", 
-		totalServCnt, totalUtil / totalServCnt * 100, (float)totalEffUsage / totalUsage * 100, grandTotal);
-	avgTT = totalWT / numSJobs + totalRT / numSJobs;
+		totalServCnt, avgUtil, avgEffUsage, grandTotal);
+	if (numSJobs) {
+		avgTT = totalWT / numSJobs + totalRT / numSJobs;
+		avgWT = totalWT / numSJobs;
+		avgET = totalRT / numSJobs;
+	}
 	printf("# avg waiting time: %ld, avg exec time: %ld, avg turnaround time: %ld\n",
-		totalWT / numSJobs, totalRT / numSJobs, avgTT);
+		avgWT, avgET, avgTT);
 	
 	free(stats);
 }
