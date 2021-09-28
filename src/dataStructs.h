@@ -111,7 +111,7 @@ enum RegularGETSFieldID {RDF_Server_TypeName, RDF_Server_ID, RDF_Server_State,
 enum FailureGETSFieldID {FDF_Num_Failures, FDF_Total_FailTime, FDF_MTTF, FDF_MTTR, 
 							FDF_MADF, FDF_Last_OpTime, END_FDF};
 
-enum LSTJFieldID {LF_Job_ID, LF_Job_State, LF_StartTime, LF_Est_RunTime, LF_Job_Core, LF_Job_Memory, LF_Job_Disk, END_LF};
+enum LSTJFieldID {LF_Job_ID, LF_Job_State, LF_SubmitTime, LF_StartTime, LF_Est_RunTime, LF_Job_Core, LF_Job_Memory, LF_Job_Disk, END_LF};
 
 
 typedef struct {

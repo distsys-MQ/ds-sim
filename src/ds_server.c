@@ -10,7 +10,6 @@
 		- change term 'resource' (when referring to server) to 'server'; 
 		- define the max length of server type name, max sizes of resources (cores, mem and disk)
 
-		- change the format of LSTJ response to be the same as that of GETS, i.e., batch message
 		- implement the complete interactive mode that the user can run event by event and make responses manually
 		
 		- simulated a global queue by implementing QUEJ (queue job) and 
@@ -44,7 +43,7 @@
 //#define DEBUG
 //#define FAIL_DEBUG
 
-#define VERSION						"19-March, 2021 @ MQ - client-server"
+#define VERSION						"12-May, 2021 @ MQ - client-server" 
 #define DEVELOPERS					"Young Choon Lee, Young Ki Kim and Jayden King"
 
 // global variables
@@ -187,7 +186,8 @@ const DATAFieldSize failGETSFSizes[] = {{FDF_Num_Failures, 6},
 										{FDF_Last_OpTime, 6}};
 
 const DATAFieldSize LSTJFSizes[] = {{LF_Job_ID, 6}, 
-										{LF_Job_State, 10}, 
+										{LF_Job_State, 10},
+										{LF_SubmitTime, 6}, 										
 										{LF_StartTime, 6}, 
 										{LF_Est_RunTime, 6}, 
 										{LF_Job_Core, 3}, 
@@ -643,17 +643,17 @@ int BreakPointMode(char *msgToSend, int nextEvent)
 
 					if (numFields == 0)	{ // print the states of all servers
 						SendResInfoAll(FALSE);
-						FinalizeResInfoBuf();
+						FinalizeBatchMsg();
 					}
 					else {
 						if (numFields == 1) {	// print the states of all servers of specified type
 							SendResInfoByType(servType, NULL, FALSE);
-							FinalizeResInfoBuf();
+							FinalizeBatchMsg();
 			
 						}
 						else { // print the state of specified server
 							SendResInfoByServer(servType, sID, NULL, FALSE);
-							FinalizeResInfoBuf();
+							FinalizeBatchMsg();
 						}
 					}
 					puts(g_batchMsg);
@@ -762,17 +762,17 @@ int InteractiveMode(char *msgSent, char *msgRcvd)
 
 				if (numFields == 0)	{ // print the states of all servers
 					SendResInfoAll(FALSE);
-					FinalizeResInfoBuf();
+					FinalizeBatchMsg();
 				}
 				else {
 					if (numFields == 1) {	// print the states of all servers of specified type
 						SendResInfoByType(servType, NULL, FALSE);
-						FinalizeResInfoBuf();
+						FinalizeBatchMsg();
 		
 					}
 					else { // print the state of specified server
 						SendResInfoByServer(servType, sID, NULL, FALSE);
-						FinalizeResInfoBuf();
+						FinalizeBatchMsg();
 					}
 				}
 				puts(g_batchMsg);
@@ -2547,14 +2547,17 @@ void WriteJobs()
 	for (i = 0; i < g_workloadInfo.numJobs; i++) {
 		Job *job = &g_workloadInfo.jobs[i];
 		ServerRes *resReq = &job->resReq;
-		/*fprintf(f, "\t<job id=\"%d\" type=\"%s\" submitTime=\"%d\" estRunTime=\"%d\" actRunTime=\"%d\" \
+#ifdef JOB		
+		fprintf(f, "\t<job id=\"%d\" type=\"%s\" submitTime=\"%d\" estRunTime=\"%d\" actRunTime=\"%d\" \
 cores=\"%d\" memory=\"%d\" disk=\"%d\" />\n", 
 			job->id, g_workloadInfo.jobTypes[job->type].name, job->submitTime, 
-			job->estRunTime, job->actRunTime, resReq->cores, resReq->mem, resReq->disk);*/
+			job->estRunTime, job->actRunTime, resReq->cores, resReq->mem, resReq->disk);
+#else
 		fprintf(f, "\t<job id=\"%d\" type=\"%s\" submitTime=\"%d\" estRunTime=\"%d\" \
 cores=\"%d\" memory=\"%d\" disk=\"%d\" />\n", 
 			job->id, g_workloadInfo.jobTypes[job->type].name, job->submitTime, 
 			job->estRunTime, resReq->cores, resReq->mem, resReq->disk);
+#endif
 	}
 	fprintf(f, "</jobs>\n");
 	fclose(f);
@@ -4031,7 +4034,7 @@ int SendResInfoByType(int type, ServerRes *resReq, int oldRESC)
 }
 +++*/
 
-char *ConcatResMsg(char *dest, char *src)
+char *ConcatBatchMsg(char *dest, char *src)
 {
 	int destMsgSize = dest ? strlen(dest) : 0;
 	int newMsgSize = destMsgSize + strlen(src) + 1;
@@ -4091,8 +4094,8 @@ int SendResInfoByServer(int type, int id, ServerRes *resReq, int oldRESC)
 				server->startTime, server->availCapa.cores, server->availCapa.mem, server->availCapa.disk, numWJobs, numRJobs);
 
 		if (strlen(g_bufferedMsg) + strlen(curMsg) > XLARGE_BUF_SIZE) {
-			g_batchMsg = ConcatResMsg(g_batchMsg, g_bufferedMsg);
-			g_batchMsg = ConcatResMsg(g_batchMsg, curMsg);
+			g_batchMsg = ConcatBatchMsg(g_batchMsg, g_bufferedMsg);
+			g_batchMsg = ConcatBatchMsg(g_batchMsg, curMsg);
 			g_bufferedMsg[0] = '\0';
 		}
 		else
@@ -4228,10 +4231,10 @@ int SendResInfoByBounded(ServerRes *resReq, int oldRESC)
 	return numMsgSent;
 }
 
-void FinalizeResInfoBuf()
+void FinalizeBatchMsg()
 {
 	if (strlen(g_bufferedMsg)) {	// last buffered messages
-		g_batchMsg = ConcatResMsg(g_batchMsg, g_bufferedMsg);
+		g_batchMsg = ConcatBatchMsg(g_batchMsg, g_bufferedMsg);
 		g_bufferedMsg[0] = '\0';
 	}
 
@@ -4239,15 +4242,15 @@ void FinalizeResInfoBuf()
 		g_batchMsg[strlen(g_batchMsg) - 1] = '\0';	// to remove the last newline character
 }
 
-int SendBatchResInfo(int numMsgs)
+int SendBatchMsg(char *cmd, int numMsgs)
 {
 	char msgRcvd[LARGE_BUF_SIZE];
 	int ret;
 
-	ret = SendDataHeader("GETS", numMsgs);
+	ret = SendDataHeader(cmd, numMsgs);
 	if (ret != INTACT_QUIT && numMsgs) {
 
-		FinalizeResInfoBuf();
+		FinalizeBatchMsg();
 
 		SendMsg(g_batchMsg);
 		while ((ret = RecvMsg(g_batchMsg, msgRcvd)) != INTACT_QUIT && strcmp(msgRcvd, "OK"))
@@ -4365,44 +4368,44 @@ int SendResInfo(char *msgRcvd)
 		return UNDEFINED;
 
 	if (!oldRESC)
-		ret = SendBatchResInfo(numMsgSent);
+		ret = SendBatchMsg("GETS", numMsgSent);
 
 	return (ret != INTACT_QUIT ? numMsgSent : ret);
 }
 
-int SendJobsPerStateOnServer(SchedJob *sJob, int numMsgSent)
+int SendJobsPerStateOnServer(SchedJob *sJob)
 {
 	char msgToSend[LARGE_BUF_SIZE];
 	char msgRcvd[LARGE_BUF_SIZE];
-	int ret = numMsgSent;
+	char curMsg[LARGE_BUF_SIZE];
+	int numMsgs = 0;
 	
 	for (; sJob; sJob = sJob->next) {
 		Job *job = sJob->job;
 		ServerRes *resReq = &job->resReq;
 		
-		sprintf(msgToSend, "%d %d %d %d %d %d %d", job->id, sJob->state, sJob->startTime, job->estRunTime, 
+		sprintf(curMsg, "%d %d %d %d %d %d %d %d\n", job->id, sJob->state, sJob->job->submitTime, sJob->startTime, job->estRunTime, 
 			resReq->cores, resReq->mem, resReq->disk);
-		SendMsg(msgToSend);
-		numMsgSent++;
-		
-		while ((ret = RecvMsg(msgToSend, msgRcvd)) != INTACT_QUIT && strcmp(msgRcvd, "OK"))
-			fprintf(stderr, "The message is supposed to be \"OK\", but received \"%s\"\n", msgRcvd);
-		
-		/*ret = RecvMsg(msgToSend, msgRcvd);
-		
-		if (ret != INTACT_QUIT && strcmp(msgRcvd, "OK")) {
-			fprintf(stderr, "The message is supposed to be \"OK\", but received \"%s\"\n", msgRcvd);
-		}*/
+
+		if (strlen(g_bufferedMsg) + strlen(curMsg) > XLARGE_BUF_SIZE) {
+			g_batchMsg = ConcatBatchMsg(g_batchMsg, g_bufferedMsg);
+			g_batchMsg = ConcatBatchMsg(g_batchMsg, curMsg);
+			g_bufferedMsg[0] = '\0';
+		}
+		else
+			strcat(g_bufferedMsg, curMsg);
+
+		numMsgs++;
 	}
 	
-	return (ret != INTACT_QUIT ? numMsgSent : ret);
+	return numMsgs;
 }
 
 int SendJobsOnServer(char *msgRcvd)
 {
 	char servTypeName[LARGE_BUF_SIZE];
 	int sID, servType;
-	int numFields, numMsgSent = 0;
+	int numFields, numMsgs = 0;
 	int ret;
 	Server *server;
 
@@ -4412,15 +4415,12 @@ int SendJobsOnServer(char *msgRcvd)
 		IsOutOfBound(sID, 0, g_systemInfo.sTypes[servType].limit - 1, "Server ID"))
 		return UNDEFINED;
 
-	ret = SendDataHeader("LSTJ", 1);
-	if (ret == INTACT_QUIT) return ret;
 	server = GetServer(servType, sID);
-	ret = SendJobsPerStateOnServer(server->running, numMsgSent); // Running jobs
-	if (ret == INTACT_QUIT) return ret;
-	numMsgSent += ret;
-	ret = SendJobsPerStateOnServer(server->waiting, numMsgSent); // Waiting jobs
+	numMsgs += SendJobsPerStateOnServer(server->running); // Running jobs
+	numMsgs += SendJobsPerStateOnServer(server->waiting); // Waiting jobs	
+	ret = SendBatchMsg("LSTJ", numMsgs);
 
-	return (ret != INTACT_QUIT ? numMsgSent + ret : ret);
+	return (ret != INTACT_QUIT ? numMsgs : ret);
 }
 
 
@@ -5058,9 +5058,9 @@ void PrintStats()
 	printf("# total #servers used: %d, avg util: %.2f%% (ef. usage: %.2f%%), total cost: $%.2f\n", 
 		totalServCnt, avgUtil, avgEffUsage, grandTotal);
 	if (numSJobs) {
-		avgTT = totalWT / numSJobs + totalRT / numSJobs;
 		avgWT = totalWT / numSJobs;
 		avgET = totalRT / numSJobs;
+		avgTT = avgWT + avgET;
 	}
 	printf("# avg waiting time: %ld, avg exec time: %ld, avg turnaround time: %ld\n",
 		avgWT, avgET, avgTT);
