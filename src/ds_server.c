@@ -3,12 +3,13 @@
 	Department of Computing, Macquarie University, Australia
 	Initially developed by Young Choon Lee in Jan. 2019
 	
+	Change log:
+		+ server resource limits have increased to 1024, 2147483647 and 2147483647 for #cores, RAM and disk, respectively.
+		+ the XML attribute name of server core count has changed to "cores" to be consistent with that for job requirement.
+		
 	TODO:
 		- tidy up the main function w.r.t. different commands
 		- relative path for failure trace file and job file (mayby use of an env variable like CLASSPATH in Java)
-		
-		- change term 'resource' (when referring to server) to 'server'; 
-		- define the max length of server type name, max sizes of resources (cores, mem and disk)
 
 		- implement the complete interactive mode that the user can run event by event and make responses manually
 		
@@ -43,7 +44,7 @@
 //#define DEBUG
 //#define FAIL_DEBUG
 
-#define VERSION						"12-May, 2021 @ MQ - client-server" 
+#define VERSION						"14-Feb, 2022 @ MQ - client-server" 
 #define DEVELOPERS					"Young Choon Lee, Young Ki Kim and Jayden King"
 
 // global variables
@@ -86,9 +87,9 @@ Limit limits[] = {
 					{"Random seed limit", 1, UINT_MAX, DEFAULT_RND_SEED},
 					{"Server failure time granularity", MIN_IN_SECONDS, HOUR_IN_SECONDS, DEFAULT_RES_FAIL_T_GRAIN},
 					{"Server failure scale factor", 1, 100, 100},	// in percentage with respect to the original failure distribution
-					{"Core count limit", 1, 256, 4},
-					{"Memory limit", 1000, 8192000, 32000},
-					{"Disk limit", 1000, 8192000, 64000},
+					{"Core count limit", 1, 1024, 4},
+					{"Memory limit", 1000, 2147483647, 32000},
+					{"Disk limit", 1000, 2147483647, 64000},
 					{"Min load limit", 1, 99, 10},
 					{"Max load limit", 1, 100, 90},
 					{"Job type limit", 1, CHAR_MAX, END_JOB_TYPE},
@@ -1202,7 +1203,7 @@ int StoreServerType(xmlNode *node)
 	
 	capacity = &sTypes[i].capacity;
 	
-	if ((retValue = GetIntValue((char *)xmlGetProp(node, (xmlChar *)"coreCount"), "Core count")) == UNDEFINED || 
+	if ((retValue = GetIntValue((char *)xmlGetProp(node, (xmlChar *)"cores"), "Core count")) == UNDEFINED || 
 		IsOutOfBound(retValue, limits[CCnt_Limit].min, limits[CCnt_Limit].max, limits[CCnt_Limit].name))
 		return FALSE;
 	capacity->cores = retValue;
@@ -2746,7 +2747,7 @@ void WriteSystemInfo()
 		ServerRes *capacity = &sType->capacity;
 	
 		fprintf(f, "\t\t<server type=\"%s\" limit=\"%d\" bootupTime=\"%d\" hourlyRate=\"%.2f\" \
-coreCount=\"%d\" memory=\"%d\" disk=\"%d\" />\n", sType->name, sType->limit, sType->bootupTime, \
+cores=\"%d\" memory=\"%d\" disk=\"%d\" />\n", sType->name, sType->limit, sType->bootupTime, \
 			sType->rate, capacity->cores, capacity->mem, capacity->disk);
 	}
 	
