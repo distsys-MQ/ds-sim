@@ -44,7 +44,7 @@
 //#define DEBUG
 //#define FAIL_DEBUG
 
-#define VERSION						"14-Feb, 2022 @ MQ - client-server" 
+#define VERSION						"27-May, 2022 @ MQ - client-server" 
 #define DEVELOPERS					"Young Choon Lee, Young Ki Kim and Jayden King"
 
 // global variables
@@ -2887,7 +2887,7 @@ int HandleSCHD(char *msgRcvd, char *msgToSend)
 	char buffer[LARGE_BUF_SIZE] = ""; 
 	
 	sscanf(msgRcvd, "SCHD %d %s %d", &jID, stName, &sID);
-	if ((status = IsSchdValid(jID, stName, sID)))
+	if ((status = IsSchdInvalid(jID, stName, sID)))
 		sprintf(buffer, "%s", SchdStatusList[status].status);
 	else {
 		int sType = FindResTypeByName(stName);
@@ -3811,7 +3811,7 @@ int MigrateJob(char *msg)
 
 	if (ret == SCHD_Valid) {
 		DisconnectSchedJob(sJob, srcServer);
-		if (sJob->state == JS_Running)
+		if (sJob->startTime != UNKNOWN) // a scheduled job is either running or ready to run as soon as the server gets finished the booting
 			UpdateServerCapacity(srcServer, &sJob->job->resReq, INCREASE);
 		free(sJob);
 		if (srcServer->state == SS_Booting && !srcServer->waiting && !srcServer->running)
@@ -3826,7 +3826,7 @@ int MigrateJob(char *msg)
 	else
 		free(dupSJob);
 
-	return ret;
+	return (ret == SCHD_Valid);
 }
 
 
@@ -4658,7 +4658,7 @@ int BackFillJob(Job *job)
 }
 
 
-int IsSchdValid(int jID, char *stName, int sID)
+int IsSchdInvalid(int jID, char *stName, int sID)
 {
 	int sType;
 	

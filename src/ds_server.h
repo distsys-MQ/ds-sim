@@ -150,7 +150,7 @@ SchedJob *FindSchedJobByState(int jID, enum JobState state, Server *server);
 SchedJob *FindSchedJob(int jID, Server *server);
 void PreemptJob(SchedJob *sJob, int eventType, int eventTime);
 int KillJob(char *cmd);
-int IsSchdValid(int jID, char *stName, int sID);
+int IsSchdInvalid(int jID, char *stName, int sID);
 SchedJob **GetSchedJobList(int jState, Server *server);
 int AssignToServer(SchedJob *sJob, Server *server, char *msg);
 int IsSuffAvailRes(ServerRes *resReq, ServerRes *availCapa);
