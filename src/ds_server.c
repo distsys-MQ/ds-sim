@@ -10,15 +10,8 @@
 	TODO:
 		- tidy up the main function w.r.t. different commands
 		- relative path for failure trace file and job file (mayby use of an env variable like CLASSPATH in Java)
-
-		- implement the complete interactive mode that the user can run event by event and make responses manually
-		
-		- simulated a global queue by implementing QUEJ (queue job) and 
-			LSTJ option (LSTJ *queued* n; this can be simulated by maintaining a queue on the client side, n for the number of queued jobs (1 - n)); 
-			LSTJ queued #: the number of queued jobs
-			LSTJ queued *: all queued jobs
-			LSTJ queued i: ith job in the queue
 		- have an option for GETS to send the server state information that has changed since the last inquiry
+		- more specific error messages
 	
 *********************************************************************/
 #include <stdio.h>
@@ -44,7 +37,7 @@
 //#define DEBUG
 //#define FAIL_DEBUG
 
-#define VERSION						"27-May, 2022 @ MQ - client-server" 
+#define VERSION						"28-Feb, 2023 @ MQ - client-server" 
 #define DEVELOPERS					"Young Choon Lee, Young Ki Kim and Jayden King"
 
 // global variables
@@ -66,11 +59,14 @@ Command cmds[] = {	// only those that need to be explicitly processed/handled
 	{CMD_SCHD, "SCHD", CI_Client, "scheduling decision", HandleSCHD},
 	{CMD_JCPL, "JCPL", CI_Server, "job completion", HandleJCPL},
 	{CMD_LSTJ, "LSTJ", CI_Client, "list of running and waiting jobs on a specified server", HandleLSTJ},
+	{CMD_LSTQ, "LSTQ", CI_Client, "list jobs in a queue", HandleLSTQ},
 	{CMD_CNTJ, "CNTJ", CI_Client, "the number of jobs in a particular state on a specified server", HandleCNTJ},
 	{CMD_MIGJ, "MIGJ", CI_Client, "job migration", HandleMIGJ},
 	{CMD_EJWT, "EJWT", CI_Client, "estimate of total waiting time on a specified server", HandleEJWT},
 	{CMD_TERM, "TERM", CI_Client, "terminate a server", HandleTERM},
-	{CMD_KILJ, "KILJ", CI_Client, "kill a job", HandleKILJ}};
+	{CMD_KILJ, "KILJ", CI_Client, "kill a job", HandleKILJ},
+	{CMD_ENQJ, "ENQJ", CI_Client, "enqueue a job to the global queue", HandleENQJ},
+	{CMD_DEQJ, "DEQJ", CI_Client, "dequeue a job from the global queue", HandleDEQJ}};
 
 char *issuers[] = {"Client", "Server", "Both"};
 
@@ -101,7 +97,7 @@ SimOption simOpts[] = {
 					{"b(reak) point: stop at the submission of a particular job", 'b', TRUE, "job id", FALSE},
 					{"c(onfiguration file): use of configuration file", 'c', TRUE, "configuration file name (.xml)", FALSE},
 					{"d(uration): simulation duration/end time", 'd', TRUE, "n (in seconds)", FALSE},
-					{"f(ailure): failure distribution model (e.g., teragrid, nd07cpu and websites02)", 'f', TRUE, "teragrid|nd07cpu|websits02|g5k06|pl05|ldns04", FALSE},
+					{"f(ailure): failure distribution model (e.g., teragrid, nd07cpu and websites02)", 'f', TRUE, "teragrid|nd07cpu|websites02|g5k06|pl05|ldns04", FALSE},
 					{"g(ranularity): time granularity for resource failures", 'g', TRUE, "n (in second)", FALSE},
 					{"h(elp): usage", 'h', TRUE, "all|usage|limits|stats", FALSE},
 					{"i(nteractive): run simulation in the interactive mode", 'i', FALSE, "", FALSE},
@@ -186,14 +182,27 @@ const DATAFieldSize failGETSFSizes[] = {{FDF_Num_Failures, 6},
 										{FDF_MADF, 6}, 
 										{FDF_Last_OpTime, 6}};
 
-const DATAFieldSize LSTJFSizes[] = {{LF_Job_ID, 6}, 
-										{LF_Job_State, 10},
-										{LF_SubmitTime, 6}, 										
-										{LF_StartTime, 6}, 
-										{LF_Est_RunTime, 6}, 
-										{LF_Job_Core, 3}, 
-										{LF_Job_Memory, 7},
-										{LF_Job_Disk, 7}};
+const DATAFieldSize LSTJFSizes[] = {{LJ_Job_ID, 6}, 
+										{LJ_Job_State, 10},
+										{LJ_SubmitTime, 6}, 										
+										{LJ_StartTime, 6}, 
+										{LJ_Est_RunTime, 6}, 
+										{LJ_Job_Core, 3}, 
+										{LJ_Job_Memory, 7},
+										{LJ_Job_Disk, 7}};
+
+const DATAFieldSize LSTQFSizes[] = {{LQ_Job_ID, 6}, 
+										{LQ_Q_ID, 6},
+										{LQ_SubmitTime, 6}, 										
+										{LQ_QueuedTime, 6}, 
+										{LQ_Est_RunTime, 6}, 
+										{LQ_Job_Core, 3}, 
+										{LQ_Job_Memory, 7},
+										{LQ_Job_Disk, 7}};
+
+const GlobalQOpt GlobalQOpts[] = {{LQO_Last_Job, '$'},
+									{LQO_Num_Jobs, '#'},
+									{LQO_All_Jobs, '*'}};
 
 const SubOption verboseOptions[] = {{VERBOSE_NONE, "", 0},
 								{VERBOSE_STATS, "stats", 5},
@@ -205,7 +214,7 @@ const SubOption verboseOptions[] = {{VERBOSE_NONE, "", 0},
 SimConfig g_sConfig;
 System g_systemInfo;
 Workload g_workloadInfo;
-SimStatus g_ss = {0, 0, 0, 0, NULL};
+SimStatus g_ss = {0, 0, 0, 0, NULL, NULL, 0};
 int g_conn;
 int g_fd;
 SchedJob *g_cSJob = NULL;
@@ -391,8 +400,9 @@ int main(int argc, char **argv)
 		strcpy(msgToSend, "QUIT");
 		SendMsg(msgToSend);
 		
-		if (g_ss.waitJQ || g_ss.curJobID < g_workloadInfo.numJobs) { // scheduling incomplete
-			fprintf(stderr, "%d jobs not scheduled!\n", g_workloadInfo.numJobs - g_ss.curJobID + CountWJobs());
+		if (g_ss.waitJQ || g_ss.curJobID < g_workloadInfo.numJobs || g_ss.globalQlength) { // scheduling incomplete
+			int numUnschdJobs = g_workloadInfo.numJobs - g_ss.curJobID + CountWJobs() + g_ss.globalQlength;
+			fprintf(stderr, "%d jobs not scheduled!\n", numUnschdJobs);
 			if (simOpts[SO_Verbose].used)
 				PrintUnscheduledJobs();
 		}
@@ -445,17 +455,21 @@ void InitSim()
 	g_sConfig.termination.maxJobCnt = limits[JCnt_Limit].def;
 	g_sConfig.regGETSRecLen = 
 	g_sConfig.failGETSRecLen = 
-	g_sConfig.LSTJRecLen = 0;
+	g_sConfig.LSTJRecLen = 
+	g_sConfig.LSTQRecLen = 0;
 	for (i = 0; i < END_RDF; i++)
 		g_sConfig.regGETSRecLen += regGETSFSizes[i].maxLength;
 	g_sConfig.regGETSRecLen += END_RDF;		// for spaces between fields
 	for (i = 0; i < END_FDF; i++)
 		g_sConfig.failGETSRecLen += failGETSFSizes[i].maxLength;
 	g_sConfig.failGETSRecLen += END_FDF;	// for spaces between fields
-	for (i = 0; i < END_LF; i++)
+	for (i = 0; i < END_LJ; i++)
 		g_sConfig.LSTJRecLen += LSTJFSizes[i].maxLength;
-	g_sConfig.LSTJRecLen += END_LF;			// for spaces between fields
-	
+	g_sConfig.LSTJRecLen += END_LJ;			// for spaces between fields
+	for (i = 0; i < END_LQ; i++)
+		g_sConfig.LSTQRecLen += LSTQFSizes[i].maxLength;
+	g_sConfig.LSTQRecLen += END_LJ;			// for spaces between fields
+
 	g_systemInfo.numServTypes = limits[SType_Limit].def;
 	g_systemInfo.maxServType = UNKNOWN;
 	g_systemInfo.totalNumServers = 0;
@@ -2313,8 +2327,7 @@ int LoadJobs(xmlNode *node)
 
 int FindPrevSmallerCoreCnt(int curCoreCnt, int startSTInx)
 {
-	int i, cores;
-	int nsTypes = g_systemInfo.numServTypes;
+	int i;
 	ServerTypeProp *sTypes = g_systemInfo.sTypes;
 	
 	for (i = startSTInx; i >= 0 && sTypes[i].capacity.cores >= curCoreCnt; i--);
@@ -2760,6 +2773,8 @@ cores=\"%d\" memory=\"%d\" disk=\"%d\" />\n", sType->name, sType->limit, sType->
 int HandleREDY(char *msgRcvd, char *msgToSend)
 {
 	static long int njFTime;	// finish time of next completing job; it has to be here as it doesn't get updated every time
+	static int chkQ = FALSE;
+	static int prevQLen = 0;
 	long int nJobSubmT;	// submission time of next job
 	long int nFailET;	// next failure event time, either failure or recovery
 	int noMoreJobs;
@@ -2774,8 +2789,19 @@ int HandleREDY(char *msgRcvd, char *msgToSend)
 
 	nJobSubmT = GetNextJobSubmitTime();
 
-	if (nJobSubmT == UNKNOWN)	// no more jobs to be submitted
+	if (nJobSubmT == UNKNOWN) {	// no more new jobs to be submitted
 		nJobSubmT = TIME_MAX;
+		if (g_ss.globalQlength) {
+			if (!chkQ && prevQLen == 0) // first time
+				chkQ = TRUE;
+			else
+			if (chkQ && prevQLen == g_ss.globalQlength) // CHKQ sent, but no job in the queue has been scheduled
+				chkQ = FALSE;
+			// otherwise, keep chkQ TRUE, i.e., there might be a chance for another job to be scheduled
+		}
+		else
+			chkQ = FALSE;
+	}
 	
 	if (g_systemInfo.rFailT) {
 		nFailET = GetNextResFailEventTime();
@@ -2784,12 +2810,12 @@ int HandleREDY(char *msgRcvd, char *msgToSend)
 	}
 
 	noMoreJobs = njFTime == TIME_MAX && nJobSubmT == TIME_MAX;
-		
+
 	// "njFTime <= nFailET" below and "nFailET < njFTime" in 'else-if' indicate 
 	// the precedence between job completion and resource failure;
 	// in other words, if job completion and resource failure/recovery take place at the same time
 	// job completion is processed first
-	if (!noMoreJobs && njFTime != TIME_MAX && njFTime <= nFailET && njFTime <= nJobSubmT) {
+	if (!chkQ && !noMoreJobs && njFTime != TIME_MAX && njFTime <= nFailET && njFTime <= nJobSubmT) {
 		if (!g_ncJobs) {
 			g_ncJobs = GetNextCmpltJobs(njFTime);
 			if (g_ncJobs) {
@@ -2804,9 +2830,10 @@ int HandleREDY(char *msgRcvd, char *msgToSend)
 		strcpy(cmd, "JCPL");
 		sprintf(buffer, "%s %d %d %s %d", cmd, g_cSJob->endTime, g_cSJob->job->id, FindResTypeNameByType(g_cSJob->sType), g_cSJob->sID);
 		g_ncJobs = RemoveFJobFromList(g_ncJobs);
+		prevQLen = 0; // reset, so that the queue can be checked if there are no more new jobs
 	}
 	else // nFailET indicates if failures are simulated
-	if (!noMoreJobs && nFailET != TIME_MAX && nFailET < njFTime && nFailET <= nJobSubmT) {
+	if (!chkQ && !noMoreJobs && nFailET != TIME_MAX && nFailET < njFTime && nFailET <= nJobSubmT) {
 		int failure = CheckForFailures(nFailET);
 		// now with sending a job completion message, the very next simulation event is a resource failure 
 		// when the above if conditions are satisfied
@@ -2824,18 +2851,24 @@ int HandleREDY(char *msgRcvd, char *msgToSend)
 	}
 	else {
 		int submitTime;
-
+		
 		job = GetNextJobToSched(&submitTime);
 
-		if (!job) {	// no more jobs to schedule and all jobs have completed
-			assert(g_ss.numJobsCompleted == g_workloadInfo.numJobs);
-			strcpy(buffer, "NONE");
+		if (!job) {	
+			if (g_ss.numJobsCompleted == g_workloadInfo.numJobs) // no more jobs to schedule and all jobs have completed
+				strcpy(buffer, "NONE");
+			else // all jobs submitted, but some may be in the queue, i.e., not all jobs completed
+			if (g_ss.numJobsCompleted < g_workloadInfo.numJobs) {
+				strcpy(buffer, "CHKQ");
+				prevQLen = g_ss.globalQlength;
+			}
+			assert(g_ss.numJobsCompleted <= g_workloadInfo.numJobs);
 		}
 		else {
 			if (job->submitTime == submitTime)	// normal job submission
 				strcpy(cmd, "JOBN");
 			else
-			if (job->submitTime < submitTime)	// preempted job (failed/killed)
+			if (job->submitTime < submitTime)	// preempted job (failed, killed or queued)
 				strcpy(cmd, "JOBP");
 			// cmd: 4 chars submit_time: int job_id: int estimated_runtime: int #cores_requested: int memory: int disk: int
 			sprintf(buffer, "%s %d %d %d %d %d %d", cmd, submitTime, job->id, 
@@ -2920,6 +2953,16 @@ int HandleLSTJ(char *msgRcvd, char *msgToSend)
 	return ret;
 }
 
+int HandleLSTQ(char *msgRcvd, char *msgToSend)
+{
+	int ret = ListQueuedJobs(msgRcvd, msgToSend);
+			
+	if (ret == UNDEFINED)
+		sprintf(msgToSend, "ERR: invalid queued job listing query (%s)!", msgRcvd);
+
+	return ret;
+}
+
 int HandleCNTJ(char *msgRcvd, char *msgToSend)
 {
 	int ret = SendJobCountOfServer(msgRcvd);
@@ -2980,6 +3023,57 @@ int HandleKILJ(char *msgRcvd, char *msgToSend)
 	return TRUE;
 }
 
+
+int HandleENQJ(char *msgRcvd, char *msgToSend)
+{
+	int numFields;
+	char qName[DEFAULT_BUF_SIZE];
+
+	numFields = sscanf(msgRcvd, "ENQJ %s", qName);
+	if (numFields < 1)
+		strcpy(msgToSend, "ERR: invalid syntax (ENQJ queue_name)!");
+	else
+	if (strcmp(qName, GLOBAL_Q)) // currently only global queue is implemented
+		sprintf(msgToSend, "ERR: no such queue exists (%s)!", msgRcvd);
+	else {
+		if (!g_lastJobSent) 
+			strcpy(msgToSend, "ERR: no job to enqueue!");
+		else
+		{
+			EnqueueJob(g_lastJobSent, g_ss.curSimTime);
+			RemoveWaitingJob(g_lastJobSent->id);
+			g_lastJobSent = NULL;
+			strcpy(msgToSend, "OK");
+		}
+	}
+
+	return TRUE;
+}
+
+int HandleDEQJ(char *msgRcvd, char *msgToSend)
+{
+	int qID, numFields;
+	char qName[DEFAULT_BUF_SIZE];
+	QueuedJob *qJob = NULL;
+
+	numFields = sscanf(msgRcvd, "DEQJ %s %d", qName, &qID);
+	if (numFields < 2)
+		strcpy(msgToSend, "ERR: invalid syntax (DEQJ queue_name q_ID)!");
+	else
+	if (!(qJob = DequeueJob(qID)))
+		sprintf(msgToSend, 
+			"ERR: no job in the queue ID of %d (current Q length: %d)!", 
+			qID, g_ss.globalQlength);
+	else {
+		AddToHeadWaitingJobQ(qJob->job, g_ss.curSimTime);
+		free(qJob);
+		strcpy(msgToSend, "OK");
+	}
+
+	return TRUE;
+}
+
+
 inline Server *GetServer(int type, int id)
 {
 	return &g_systemInfo.servers[type][id];
@@ -3025,7 +3119,8 @@ void HandlePreemptedJob(SchedJob *sJob, int eventType, int eventTime)
 	if (simOpts[SO_Verbose].used != VERBOSE_STATS)
 		printf("t: %10d job %5d on #%2d of server %s %s\n", 
 			g_ss.curSimTime, sJob->job->id, server->id, g_systemInfo.sTypes[server->type].name, jobStates[eventType].state);
-	AddToWaitingJobList(sJob->job, eventTime);
+	//AddToWaitingJobList(sJob->job, eventTime);
+	EnqueueJob(sJob->job, eventTime);
 	UpdateServerUsage(sJob, server);
 }
 
@@ -3166,20 +3261,12 @@ int CheckForFailures(int nextFET)
 }
 
 
-int FreeWaitingJob(int jID)
+int RemoveWaitingJob(int jID)
 {
-	WaitingJob *prev, *cur;
-	
-	for (prev = NULL, cur = g_ss.waitJQ; cur && cur->job->id != jID; prev = cur, cur = cur->next);
-	if (!cur)	// not found
-		return FALSE;
-	else {
-		if (!prev)
-			g_ss.waitJQ = cur->next;
-		else
-			prev->next = cur->next;
-		free(cur);
-	}
+	WaitingJob *wJob;
+
+	assert((wJob = DisconnectWaitingJob(jID)));
+	free(wJob);
 	
 	return TRUE;
 }
@@ -3256,6 +3343,60 @@ void AddToWaitingJobList(Job *job, int submitTime)
 }
 
 
+void AddToHeadWaitingJobQ(Job *job, int submitTime)
+{
+	WaitingJob *wJob = (WaitingJob *)malloc(sizeof(WaitingJob));
+	
+	wJob->submitTime = submitTime;
+	wJob->job = job;
+	wJob->next = g_ss.waitJQ;
+	g_ss.waitJQ = wJob;
+}
+
+int EnqueueJob(Job *job, int submitTime)
+{
+	QueuedJob *cur, *next, *qJob = (QueuedJob *)malloc(sizeof(QueuedJob));
+	int qID = 0;
+
+	qJob->submitTime = submitTime;
+	qJob->job = job;
+	qJob->next = NULL;
+	if (!g_ss.globalQ)
+		g_ss.globalQ = qJob;
+	else {	// find the rear of the queue
+		for (cur = g_ss.globalQ, next = cur->next, qID = 1; next; cur = next, next = next->next, qID++);
+		cur->next = qJob;
+	}
+
+	g_ss.globalQlength = qID + 1;
+
+	return qID;
+}
+
+
+QueuedJob *DequeueJob(int qID)
+{
+	QueuedJob *cur = g_ss.globalQ;
+	QueuedJob *prev, *qJob = NULL;
+	int curQID;
+
+	if (!cur || qID >= g_ss.globalQlength) return NULL;
+	for (prev = NULL, curQID = 0; 
+		curQID < qID; 
+		prev = cur, cur = cur->next, curQID++);
+	g_ss.globalQlength--;
+	qJob = cur;
+	if (!prev)
+		g_ss.globalQ = cur->next;
+	else
+		prev->next = cur->next;
+
+	qJob->next = NULL;
+
+	return qJob;		
+}
+
+
 int GetNextJobSubmitTime()
 {
 	WaitingJob *wJob;
@@ -3293,6 +3434,9 @@ Job *GetNextJobToSched(int *submitTime)
 		return NULL;
 	
 	job = &g_workloadInfo.jobs[g_ss.curJobID];
+	// add 'job' to g_ss.waitJQ, 
+	// so that when its actual scheduling (SCHD) takes place, 
+	// the job can be retrieved from there
 	AddToWaitingJobList(job, job->submitTime);
 	*submitTime = 
 	g_ss.curSimTime = job->submitTime;
@@ -3962,6 +4106,9 @@ int SendDataHeader(char *cmd, int nRecs)
 		else
 		if (!strcmp(cmd, "LSTJ"))
 			recLen = g_sConfig.LSTJRecLen;
+		else
+		if (!strcmp(cmd, "LSTQ"))
+			recLen = g_sConfig.LSTQRecLen;
 		
 		sprintf(msgToSend, "DATA %d %d", nRecs, recLen);
 	}
@@ -4376,8 +4523,6 @@ int SendResInfo(char *msgRcvd)
 
 int SendJobsPerStateOnServer(SchedJob *sJob)
 {
-	char msgToSend[LARGE_BUF_SIZE];
-	char msgRcvd[LARGE_BUF_SIZE];
 	char curMsg[LARGE_BUF_SIZE];
 	int numMsgs = 0;
 	
@@ -4410,7 +4555,7 @@ int SendJobsOnServer(char *msgRcvd)
 	int ret;
 	Server *server;
 
-	numFields = sscanf(msgRcvd, "LSTJ %s %d", servTypeName, &sID);
+	numFields = sscanf(msgRcvd, "LSTJ %s %d", servTypeName, &sID);	
 	if (numFields < 2 || 
 		(servType = FindResTypeByName(servTypeName)) == UNDEFINED ||
 		IsOutOfBound(sID, 0, g_systemInfo.sTypes[servType].limit - 1, "Server ID"))
@@ -4424,6 +4569,92 @@ int SendJobsOnServer(char *msgRcvd)
 	return (ret != INTACT_QUIT ? numMsgs : ret);
 }
 
+int GetQueuedJob(QueuedJob *qJob, int qID, char *msgToSend)
+{
+	int curQID;
+
+	for (curQID = 0; qJob && curQID != qID; qJob = qJob->next);
+	if (!qJob || curQID != qID)
+		sprintf(msgToSend, "No such queue ID (%d) exists!", qID);
+	else
+		sprintf(msgToSend, "%d %d %d %d %d %d %d %d\n", qJob->job->id, curQID, 
+			qJob->job->submitTime, qJob->submitTime, qJob->job->estRunTime, 
+			qJob->job->resReq.cores, qJob->job->resReq.mem, qJob->job->resReq.disk);
+	
+	return TRUE;
+}
+
+int GetQueuedJobs(QueuedJob *qJob)
+{
+	char curMsg[LARGE_BUF_SIZE];
+	int numMsgs = 0;
+	
+	for (int qID = 0; qJob; qJob = qJob->next, qID++) {
+		Job *job = qJob->job;
+		ServerRes *resReq = &job->resReq;
+		
+		sprintf(curMsg, "%d %d %d %d %d %d %d %d\n", job->id, qID, 
+			job->submitTime, qJob->submitTime, job->estRunTime, resReq->cores, resReq->mem, resReq->disk);
+
+		if (strlen(g_bufferedMsg) + strlen(curMsg) > XLARGE_BUF_SIZE) {
+			g_batchMsg = ConcatBatchMsg(g_batchMsg, g_bufferedMsg);
+			g_batchMsg = ConcatBatchMsg(g_batchMsg, curMsg);
+			g_bufferedMsg[0] = '\0';
+		}
+		else
+			strcat(g_bufferedMsg, curMsg);
+
+		numMsgs++;
+	}
+	
+	return numMsgs;
+}
+
+int ListQueuedJobs(char *msgRcvd, char*msgToSend)
+{
+	char qName[DEFAULT_BUF_SIZE];
+	char wildCard;
+	int qID, lstOpt = LQO_Q_ID;
+	int numFields, numMsgs = 0;
+	int ret;
+
+	numFields = sscanf(msgRcvd, "LSTQ %s %d", qName, &qID);
+	if (strcmp(qName, GLOBAL_Q)) // currently only global queue is implemented
+		return UNDEFINED;
+	if (numFields < 2) {	// the second parameter is not a number, i.e., $, # or *
+		numFields = sscanf(msgRcvd, "LSTQ %s %c", qName, &wildCard);
+		for (lstOpt = 0; lstOpt < END_LGO && wildCard != GlobalQOpts[lstOpt].optCh; lstOpt++);
+		if (lstOpt == END_LGO)
+			return UNDEFINED;
+		else
+		if (lstOpt == LQO_Last_Job) {
+			if (g_ss.globalQlength == 0)	// no jobs in the queue
+				strcpy(msgToSend, "No jobs in the queue!");
+			else
+				qID = g_ss.globalQlength - 1;
+		}
+	}
+	if (lstOpt == LQO_Q_ID || lstOpt == LQO_Last_Job) {
+		if (qID < 0 || qID >= g_ss.globalQlength)
+			return UNDEFINED;
+		ret = GetQueuedJob(g_ss.globalQ, qID, msgToSend);
+		numMsgs = 1;
+	}
+	else {
+		if (lstOpt == LQO_Num_Jobs) {
+			ret = sprintf(msgToSend, "%d", g_ss.globalQlength);
+			numMsgs = 1;
+		}
+		else {	// LQO_All_Jobs
+			numMsgs = GetQueuedJobs(g_ss.globalQ);
+			ret = SendBatchMsg("LSTQ", numMsgs);
+			if (ret != INTACT_QUIT) 
+				strcpy(msgToSend, END_DATA);
+			}
+	}
+
+	return (ret != INTACT_QUIT ? numMsgs : ret);
+}
 
 inline int CountJobs(SchedJob *sJob)
 {
@@ -4649,6 +4880,7 @@ int BackFillJob(Job *job)
 			nextJob = &g_workloadInfo.jobs[g_ss.curJobID];
 			AddToWaitingJobList(nextJob, nextJob->submitTime);
 			g_ss.curJobID++;
+			wJob->submitTime = nextJob->submitTime + 1;
 		}
 	}
 	
@@ -4836,7 +5068,7 @@ int ScheduleJob(int jID, int sType, int sID, SchedJob *mSJob)
 
 	AssignToServer(sJob, server, msg);
 	if (!mSJob)
-		FreeWaitingJob(job->id);
+		RemoveWaitingJob(job->id);
 
 	return SCHD_Valid;
 }
@@ -4854,15 +5086,20 @@ int CountWJobs()
 void PrintUnscheduledJobs()
 {
 	WaitingJob *wJob;
+	QueuedJob *qJob;
 	Job *job;
 	int i;
 	
-	printf("# -----------[ Jobs in the waiting queue ]-----------\n");
-	for (wJob = g_ss.waitJQ; wJob && wJob; wJob = wJob->next)
+	printf("# -----------[ Jobs in the scheduling queue ]-----------\n");	// waitJQ
+	for (wJob = g_ss.waitJQ; wJob; wJob = wJob->next)
 		if (wJob->submitTime != wJob->job->submitTime)	// resubmitted due perhaps to resource failure
 			printf("# Job %d initially submitted at %d and resubmitted at %d...\n", wJob->job->id, wJob->job->submitTime, wJob->submitTime);
 		else
 			printf("# Job %d submitted at %d...\n", wJob->job->id, wJob->job->submitTime);
+	printf("# ---------------------------------------------------\n");
+	printf("# -----------[ Jobs in the global queue ]-----------\n");
+	for (qJob = g_ss.globalQ; qJob; qJob = qJob->next)
+		printf("# Job %d initially submitted at %d and queued at %d...\n", qJob->job->id, qJob->job->submitTime, qJob->submitTime);
 	printf("# ---------------------------------------------------\n");
 	printf("# --------[ Jobs created and yet, submitted ]--------\n");
 	

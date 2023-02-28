@@ -26,6 +26,7 @@
 #define MAX_CONNECTIONS				10
 #define DEFAULT_JOB_CNT				1000
 #define MAX_JOB_CNT					1000000
+#define MAX_Q_LENGTH				MAX_JOB_CNT
 #define MAX_JOB_RUNTIME				(60*60*24*7)	// 7 days 
 #define MAX_SIM_END_TIME			(60*60*24*30)	// 30 days in seconds
 #define MIN_IN_SECONDS				60
@@ -44,6 +45,7 @@
 #define ENDTIME_STR					"endtime"
 #define JCNT_STR					"jobcount"
 #define UNKNOWN_SERVER_TYPE			"UNKNOWN"
+#define GLOBAL_Q					"GQ"
 #define JOB_RIGID					1
 #define JOB_MALLEABLE				2
 #define TIME_MAX					LONG_MAX
@@ -71,8 +73,8 @@
 enum Verbose {VERBOSE_NONE, VERBOSE_STATS, VERBOSE_BRIEF, VERBOSE_ALL, END_VERBOSE};
 
 enum Sim_Command {CMD_HELO, CMD_AUTH, CMD_OK, CMD_ERR, CMD_REDY, CMD_PSHJ, CMD_JOBN, CMD_JOBP, CMD_NONE, \
-				CMD_GETS, CMD_RESC, CMD_SCHD, CMD_JCPL, CMD_RESF, CMD_RESR, CMD_LSTJ, CMD_CNTJ, \
-				CMD_MIGJ, CMD_EJWT, CMD_TERM, CMD_KILJ, CMD_QUIT, END_SIM_CMD};
+				CMD_GETS, CMD_RESC, CMD_SCHD, CMD_JCPL, CMD_RESF, CMD_RESR, CMD_LSTJ, CMD_LSTQ, CMD_CNTJ, \
+				CMD_MIGJ, CMD_EJWT, CMD_TERM, CMD_KILJ, CMD_ENQJ, CMD_DEQJ, CMD_QUIT, END_SIM_CMD};
 				
 enum Cmd_Issuer {CI_Client, CI_Server, CI_Both, END_CI};
 
@@ -111,8 +113,11 @@ enum RegularGETSFieldID {RDF_Server_TypeName, RDF_Server_ID, RDF_Server_State,
 enum FailureGETSFieldID {FDF_Num_Failures, FDF_Total_FailTime, FDF_MTTF, FDF_MTTR, 
 							FDF_MADF, FDF_Last_OpTime, END_FDF};
 
-enum LSTJFieldID {LF_Job_ID, LF_Job_State, LF_SubmitTime, LF_StartTime, LF_Est_RunTime, LF_Job_Core, LF_Job_Memory, LF_Job_Disk, END_LF};
+enum LSTJFieldID {LJ_Job_ID, LJ_Job_State, LJ_SubmitTime, LJ_StartTime, LJ_Est_RunTime, LJ_Job_Core, LJ_Job_Memory, LJ_Job_Disk, END_LJ};
 
+enum LSTQFieldID {LQ_Job_ID, LQ_Q_ID, LQ_SubmitTime, LQ_QueuedTime, LQ_Est_RunTime, LQ_Job_Core, LQ_Job_Memory, LQ_Job_Disk, END_LQ};
+
+enum LSTQueueOpts {LQO_Last_Job, LQO_Num_Jobs, LQO_All_Jobs, END_LGO, LQO_Q_ID}; // LQO_Q_ID is used to indicate a job ID is specified with LSTQ
 
 typedef struct {
 	char *name;
@@ -146,6 +151,7 @@ typedef struct {
 	int regGETSRecLen;
 	int failGETSRecLen;
 	int LSTJRecLen;
+	int LSTQRecLen;
 	SimTermCondition termination;
 } SimConfig;
 
@@ -183,6 +189,12 @@ typedef struct WaitingJob {
 	Job *job;
 	struct WaitingJob *next;
 } WaitingJob;
+
+typedef struct QueuedJob {
+	int submitTime;				// submit time to the global queue
+	Job *job;
+	struct QueuedJob *next;
+} QueuedJob;
 
 typedef struct {
 	enum SchdStatus statusID;
@@ -317,6 +329,8 @@ typedef struct {
 	unsigned int actSimEndTime;
 	int numJobsCompleted;
 	WaitingJob *waitJQ;
+	QueuedJob *globalQ;
+	int globalQlength;
 } SimStatus;
 
 typedef struct {
@@ -331,5 +345,10 @@ typedef struct DATAFieldSize {
 	int id;
 	int maxLength;
 } DATAFieldSize;
+
+typedef struct GlobalQOpt {
+	int id;
+	char optCh;
+} GlobalQOpt;
 
 #endif
