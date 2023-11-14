@@ -37,7 +37,7 @@
 //#define DEBUG
 //#define FAIL_DEBUG
 
-#define VERSION						"28-Feb, 2023 @ MQ - client-server" 
+#define VERSION						"1-May, 2023 @ MQ - client-server" 
 #define DEVELOPERS					"Young Choon Lee, Young Ki Kim and Jayden King"
 
 // global variables
@@ -234,86 +234,35 @@ void SigHandler(int signo)
 	GracefulExit();
 }
 
+
 int main(int argc, char **argv)
 {
-	struct sockaddr_in serv;
 	char msgToSend[LARGE_BUF_SIZE] = ""; 
 	char msgRcvd[LARGE_BUF_SIZE] = ""; 
-	char username[LARGE_BUF_SIZE] = "";
 	int ret;
 
 	InitSim();
 
-	if (!ConfigSim(argc, argv)) {
-		if (!simOpts[SO_Help].used)
-			printf("Usage: %s -h all\n", argv[0]);
+	if (Config(argc, argv)) {
 		FreeAll();
 		return 1;
 	}
 
-	if (!g_sConfig.configFile) {	// configuration file not specified
-		GenerateSystemInfo();
-		if (!g_sConfig.jobFile)
-			GenerateWorkload();
-	}
-	else
-	if (!ValidateSystemInfo() || (!g_sConfig.jobFile && !ValidateWorkloadInfo())) {
-		FreeAll();
-		return 1;
-	}
-	
-	CompleteConfig();
-
-	if (!simOpts[SO_Interactive].used) {
-		serv.sin_family = AF_INET;
-		serv.sin_port = htons(g_sConfig.port); // set the port
-		serv.sin_addr.s_addr = INADDR_ANY;
-		assert((g_fd = socket(AF_INET, SOCK_STREAM, 0)) >= 0); // create a TCP socket
-
-		if (setsockopt(g_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &(int){ 1 }, sizeof(int)) < 0)
-			perror("setsockopt(SO_REUSEADDR | SO_REUSEPORT) failed");
-
-		bind(g_fd, (struct sockaddr *)&serv, sizeof(serv)); //assigns the address specified by serv to the socket
-		//listen(g_fd, MAX_CONNECTIONS); //Listen for client connections. Maximum 10 connections will be permitted.
-		listen(g_fd, 1); //Listen for client connections. 
-	
-		PrintWelcomeMsg(argc, argv);
-		
-		//Now we start handling the connections.
-		if ((g_conn = accept(g_fd, (struct sockaddr *)NULL, NULL)) < 0) {
-			perror("accept"); 
-			GracefulExit();
-		}
-	}
+	if (!simOpts[SO_Interactive].used) 
+		EstablishConnection(argc, argv);
 	else
 		PrintWelcomeMsg(argc, argv);
 
 	if (signal(SIGINT, SigHandler) == SIG_ERR)
 		fprintf(stderr, "\ncan't catch SIGINT\n");
-	
-	// read "HELO"
-	while (TRUE) {
-		ret = RecvMsg("", msgRcvd);
-		if (simOpts[SO_Interactive].used) {
-			if (ret == INTACT_QUIT) 
-				goto Quit;
-			else
-			if (ret != INTACT_CMD)
-				continue;
-		}
-		if (!strcmp(msgRcvd, "HELO")) {
-			strcpy(msgToSend, "OK");
-			break;
-		}
-		fprintf(stderr, "ERR: invalid message (%s)!\n", msgRcvd);
-		strcpy(msgToSend, "ERR");
 		
-		SendMsg(msgToSend);
-	}
-	SendMsg(msgToSend);
+	if (HandleHandshaking("", msgRcvd, "HELO", FALSE) == CMD_QUIT)
+		goto Quit;
+	if (HandleHandshaking("OK", msgRcvd, "AUTH", TRUE) == CMD_QUIT)
+		goto Quit;
 
 	while (TRUE) {
-		ret = RecvMsg(msgToSend, msgRcvd);
+		ret = RecvMsg("OK", msgRcvd);
 		if (simOpts[SO_Interactive].used) {
 			if (ret == INTACT_QUIT) 
 				goto Quit;
@@ -321,36 +270,14 @@ int main(int argc, char **argv)
 			if (ret != INTACT_CMD)
 				continue;
 		}
-		if (strlen(msgRcvd) > CMD_LENGTH && !strncmp(msgRcvd, "AUTH", CMD_LENGTH)) {
-			strncpy(username, &msgRcvd[CMD_LENGTH], strlen(msgRcvd) - CMD_LENGTH);
-			strcpy(msgToSend, "OK");
-			printf("# Welcome %s!\n", username);
-			WriteSystemInfo();
-			printf("# The system information can be read from '%s'\n", SYS_INFO_FILENAME);
-			break;
-		}
-		fprintf(stderr, "ERR: invalid message (%s)!\n", msgRcvd);
-		strcpy(msgToSend, "ERR");
-		SendMsg(msgToSend);
-	}
-	SendMsg(msgToSend);
-
-	while (TRUE) {
-		ret = RecvMsg(msgToSend, msgRcvd);
-		if (simOpts[SO_Interactive].used) {
-			if (ret == INTACT_QUIT) 
-				goto Quit;
-			else
-			if (ret != INTACT_CMD)
-				continue;
-		}
-		if (!strcmp(msgRcvd, "REDY"))
+		if (!strcmp(msgRcvd, "REDY") || !strncmp(msgRcvd, "GETS", CMD_LENGTH))
 			break;
 			
 		fprintf(stderr, "ERR: invalid message (%s)!\n", msgRcvd);
 		strcpy(msgToSend, "ERR");
 		SendMsg(msgToSend);
 	}
+
 	// scheduling loop
 	while (strcmp(msgRcvd, "QUIT") && ret != INTACT_QUIT) {
 		int i, printed;
@@ -496,6 +423,97 @@ void InitSim()
 }
 
 
+int Config(int argc, char **argv)
+{
+	if (!HandleCmdArgs(argc, argv)) {
+		if (!simOpts[SO_Help].used)
+			printf("Usage: %s -h all\n", argv[0]);
+		return 1;
+	}
+
+	if (!g_sConfig.configFile) {	// configuration file not specified
+		GenerateSystemInfo();
+		if (!g_sConfig.jobFile)
+			GenerateWorkload();
+	}
+	else
+	if (!ValidateSystemInfo() || (!g_sConfig.jobFile && !ValidateWorkloadInfo()))
+		return 1;
+	
+	CompleteConfig();
+
+	return 0;
+}
+
+
+void EstablishConnection(int argc, char **argv)
+{
+	struct sockaddr_in serv;
+
+	serv.sin_family = AF_INET;
+	serv.sin_port = htons(g_sConfig.port); // set the port
+	serv.sin_addr.s_addr = INADDR_ANY;
+	assert((g_fd = socket(AF_INET, SOCK_STREAM, 0)) >= 0); // create a TCP socket
+
+	if (setsockopt(g_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &(int){ 1 }, sizeof(int)) < 0)
+		perror("setsockopt(SO_REUSEADDR | SO_REUSEPORT) failed");
+
+	bind(g_fd, (struct sockaddr *)&serv, sizeof(serv)); //assigns the address specified by serv to the socket
+	//listen(g_fd, MAX_CONNECTIONS); //Listen for client connections. Maximum 10 connections will be permitted.
+	listen(g_fd, 1); //Listen for client connections. 
+
+	PrintWelcomeMsg(argc, argv);
+	
+	//Now we start handling the connections.
+	if ((g_conn = accept(g_fd, (struct sockaddr *)NULL, NULL)) < 0) {
+		perror("accept"); 
+		GracefulExit();
+	}	
+}
+
+
+int HandleHandshaking(char *prevMsg, char *msgRcvd, char *correctMsg, int arg)
+{
+	int ret;
+	char msgToSend[LARGE_BUF_SIZE] = ""; 
+
+	while (TRUE) {
+		ret = RecvMsg(prevMsg, msgRcvd);
+		if (simOpts[SO_Interactive].used) {
+			if (ret == INTACT_QUIT) 
+				return CMD_QUIT;
+			else
+			if (ret != INTACT_CMD)
+				continue;
+		}
+		if (!arg && !strcmp(msgRcvd, correctMsg)) {	// HELO and first REDY
+			strcpy(msgToSend, "OK");
+			break;
+		}
+		else
+		if (arg && strlen(msgRcvd) > CMD_LENGTH && !strncmp(msgRcvd, correctMsg, CMD_LENGTH)) {	// AUTH
+			char username[LARGE_BUF_SIZE] = "";
+
+			strncpy(username, &msgRcvd[CMD_LENGTH], strlen(msgRcvd) - CMD_LENGTH);
+			strcpy(msgToSend, "OK");
+			printf("# Welcome %s!\n", username);
+			WriteSystemInfo();
+			printf("# The system information can be read from '%s'\n", SYS_INFO_FILENAME);
+			break;
+		}
+		
+		fprintf(stderr, "ERR: invalid message (%s)!\n", msgRcvd);
+		strcpy(msgToSend, "ERR");
+		
+		SendMsg(msgToSend);
+		strcpy(prevMsg, msgToSend);
+	}
+	SendMsg(msgToSend);
+	
+	return END_SIM_CMD;	// the correct message has been received
+}
+
+
 void CreateResFailTrace()
 {
 	g_systemInfo.rFailT = (ResFailureTrace *)malloc(sizeof(ResFailureTrace));
@@ -609,7 +627,7 @@ inline int IsValidNum(char *buf)
 
 int BreakPointMode(char *msgToSend, int nextEvent)
 {
-	char cmd[DEFAULT_BUF_SIZE];
+	char *cmd = (char *)malloc(DEFAULT_BUF_SIZE);
 	int jID = UNDEFINED;
 
 	nextEvent = FALSE;
@@ -619,7 +637,7 @@ int BreakPointMode(char *msgToSend, int nextEvent)
 		int ch = getc(stdin);
 		if (ch != '\n') {
 			ungetc(ch, stdin);
-			fgets(cmd, DEFAULT_BUF_SIZE, stdin);
+			cmd = fgets(cmd, DEFAULT_BUF_SIZE, stdin);
 		}
 
 		if (ch == '\n' || cmd[0] == 'n')
@@ -687,6 +705,8 @@ int BreakPointMode(char *msgToSend, int nextEvent)
 		}
 	}
 	
+	free(cmd);
+	
 	return nextEvent;
 }
 
@@ -694,7 +714,7 @@ int BreakPointMode(char *msgToSend, int nextEvent)
 int IsCmd(char *cmdStr)
 {
 	int cmdLen, i, j, k;
-	char buffer[DEFAULT_BUF_SIZE], cmd[DEFAULT_BUF_SIZE];
+	char buffer[LARGE_BUF_SIZE], cmd[DEFAULT_BUF_SIZE];
 
 	cmdLen = strlen(cmdStr);
 	
@@ -740,8 +760,13 @@ int InteractiveMode(char *msgSent, char *msgRcvd)
 		
 		ch = getc(stdin);
 		if (ch != '\n') {
+			char *buffer = (char *)malloc(DEFAULT_BUF_SIZE);
 			ungetc(ch, stdin);
-			fgets(cmd, DEFAULT_BUF_SIZE, stdin);
+			buffer = fgets(buffer, DEFAULT_BUF_SIZE, stdin);
+			if (buffer) {
+				strcpy(cmd, buffer);
+				free(buffer);
+			}
 		}
 
 		strcpy(msgRcvd, cmd);
@@ -868,7 +893,7 @@ inline int IsOutOfBound(int value, long int min, long int max, char *message)
 	return outOfBound;
 }
 
-int ConfigSim(int argc, char **argv)
+int HandleCmdArgs(int argc, char **argv)
 {
 	int c, i;
 	int retValue;

@@ -3,6 +3,9 @@
 // function prototypes
 void PrintWelcomeMsg(int argc, char **argv);
 void InitSim();
+int Config(int argc, char **argv);
+void EstablishConnection(int argc, char **argv);
+int HandleHandshaking(char *prevMsg, char *msgRcvd, char *correctMsg, int arg);
 void CreateResFailTrace();
 inline void GracefulExit();
 void CompleteRecvMsg(char *msg, int length);
@@ -16,7 +19,7 @@ int InteractiveMode(char *msgSent, char *msgRcvd);
 int GetIntValue(char *str, char *desc);
 float GetFloatValue(char *str, char *desc);
 inline int IsOutOfBound(int value, long int min, long int max, char *message);
-int ConfigSim(int argc, char **argv);
+int HandleCmdArgs(int argc, char **argv);
 void Help(int opt);
 void ShowUsage();
 void ShowCmds();
