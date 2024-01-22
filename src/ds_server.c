@@ -37,7 +37,7 @@
 //#define DEBUG
 //#define FAIL_DEBUG
 
-#define VERSION						"1-May, 2023 @ MQ - client-server" 
+#define VERSION						"14-Jan, 2024 @ MQ - client-server" 
 #define DEVELOPERS					"Young Choon Lee, Young Ki Kim and Jayden King"
 
 // global variables
@@ -108,7 +108,7 @@ SimOption simOpts[] = {
 					{"p(ort number): TCP/IP port number", 'p', TRUE, "n", FALSE},
 					{"r(andom seed): random seed", 'r', TRUE, "n (some integer)", FALSE},
 					{"s(cale factor for resource failures): between 1 and 100; \n\t 1 for nearly no failures and 100 for original", 's', TRUE, "n (in percentage)", FALSE},
-					{"v(erbose): verbose", 'v', TRUE, "all|brief|stats", FALSE},
+					{"v(erbose): verbose", 'v', TRUE, "all|brief|jobs|stats", FALSE},
 					{NULL, ' ', FALSE, NULL, FALSE}
 				};
 				
@@ -206,6 +206,7 @@ const GlobalQOpt GlobalQOpts[] = {{LQO_Last_Job, '$'},
 
 const SubOption verboseOptions[] = {{VERBOSE_NONE, "", 0},
 								{VERBOSE_STATS, "stats", 5},
+								{VERBOSE_JOBS, "jobs", 4},
 								{VERBOSE_BRIEF, "brief", 5},
 								{VERBOSE_ALL, "all", 3}};
 
@@ -226,6 +227,9 @@ char *g_batchMsg = NULL;
 Log *g_schedOps;
 int g_logSize;
 int g_logCnt;
+char g_msgToPrint[DEFAULT_BUF_SIZE];
+char g_lastTimeStr[DEFAULT_BUF_SIZE] = "";
+int g_lastTimeStamp = UNKNOWN;
 
 
 void SigHandler(int signo)
@@ -579,7 +583,8 @@ int SendMsg(char *msg)
 				!strncmp(orgMsg, "RESF", CMD_LENGTH) ||
 				!strncmp(orgMsg, "RESR", CMD_LENGTH) ||
 				!strcmp(orgMsg, "QUIT"))))
-					ret = printf("SENT %s\n", orgMsg);
+					//ret = printf("SENT %s\n", orgMsg);
+					ret = printf("%*sSENT %s\n", (int)strlen(g_lastTimeStr), "", orgMsg);
 	}
 	else
 		ret = printf("%s\n", orgMsg);
@@ -606,7 +611,8 @@ int RecvMsg(char *msgSent, char *msgRcvd)
 				!strncmp(msgRcvd, "SCHD", CMD_LENGTH) || 
 				!strncmp(msgRcvd, "MIGJ", CMD_LENGTH) || 
 				!strcmp(msgRcvd, "QUIT")))) {
-				ret = printf("RCVD %s\n", msgRcvd); 
+				// ret = printf("RCVD %s\n", msgRcvd); 
+				ret = printf("%*sRCVD %s\n", (int)strlen(g_lastTimeStr), "", msgRcvd);
 		}
 	}
 	else {
@@ -939,6 +945,9 @@ int HandleCmdArgs(int argc, char **argv)
 				else
 				if (!strncmp(optarg, verboseOptions[VERBOSE_BRIEF].optstr, verboseOptions[VERBOSE_BRIEF].optlen))
 					simOpts[SO_Verbose].used = VERBOSE_BRIEF;
+				else
+				if (!strncmp(optarg, verboseOptions[VERBOSE_JOBS].optstr, verboseOptions[VERBOSE_JOBS].optlen))
+					simOpts[SO_Verbose].used = VERBOSE_JOBS;
 				else
 				if (!strncmp(optarg, verboseOptions[VERBOSE_STATS].optstr, verboseOptions[VERBOSE_STATS].optlen))
 					simOpts[SO_Verbose].used = VERBOSE_STATS;
@@ -2795,6 +2804,22 @@ cores=\"%d\" memory=\"%d\" disk=\"%d\" />\n", sType->name, sType->limit, sType->
 	fclose(f);
 }
 
+void PrintMsg(int time)
+{
+	char finalMsg[LARGE_BUF_SIZE];
+	
+	sprintf(finalMsg, "t %d: %s", time, g_msgToPrint);
+	
+	//if (simOpts[SO_Verbose].used == VERBOSE_JOBS) {
+		if (time != g_lastTimeStamp)
+			sprintf(g_lastTimeStr, "t %d: ", time);
+		else
+			sprintf(finalMsg, "%*s%s", (int)strlen(g_lastTimeStr), "", g_msgToPrint);
+//	}
+	printf("%s\n", finalMsg);
+	g_lastTimeStamp = time;
+}
+
 int HandleREDY(char *msgRcvd, char *msgToSend)
 {
 	static long int njFTime;	// finish time of next completing job; it has to be here as it doesn't get updated every time
@@ -2895,13 +2920,18 @@ int HandleREDY(char *msgRcvd, char *msgToSend)
 			else
 			if (job->submitTime < submitTime)	// preempted job (failed, killed or queued)
 				strcpy(cmd, "JOBP");
-			// cmd: 4 chars submit_time: int job_id: int estimated_runtime: int #cores_requested: int memory: int disk: int
-			sprintf(buffer, "%s %d %d %d %d %d %d", cmd, submitTime, job->id, 
-					job->estRunTime, job->resReq.cores, job->resReq.mem, job->resReq.disk);
+			// cmd: 4 chars job_id: int submit_time: int #cores_requested: int memory: int disk: int estimated_runtime: int
+			sprintf(buffer, "%s %d %d %d %d %d %d", cmd, job->id, submitTime, 
+					job->resReq.cores, job->resReq.mem, job->resReq.disk, job->estRunTime);
 
 			g_lastJobSent = job;
 
 			UpdateServerStates();
+			if (simOpts[SO_Verbose].used != VERBOSE_STATS) {
+				sprintf(g_msgToPrint, "job %d -- CPU: %d, Mem: %d, Disk: %d, Est Runtime: %d SUBMITTED", 
+					job->id, job->resReq.cores, job->resReq.mem, job->resReq.disk, job->estRunTime);
+				PrintMsg(submitTime);
+			}
 		}
 		FreeSJList(g_ncJobs);
 		g_ncJobs = NULL;
@@ -3141,9 +3171,11 @@ void HandlePreemptedJob(SchedJob *sJob, int eventType, int eventTime)
 	
 	sJob->state = eventType;
 	sJob->endTime = eventTime;
-	if (simOpts[SO_Verbose].used != VERBOSE_STATS)
-		printf("t: %10d job %5d on #%2d of server %s %s\n", 
-			g_ss.curSimTime, sJob->job->id, server->id, g_systemInfo.sTypes[server->type].name, jobStates[eventType].state);
+	if (simOpts[SO_Verbose].used != VERBOSE_STATS) {
+		sprintf(g_msgToPrint, "job %d on %s %d %s\n", 
+			sJob->job->id, g_systemInfo.sTypes[server->type].name, server->id, jobStates[eventType].state);
+		PrintMsg(g_ss.curSimTime);
+	}
 	//AddToWaitingJobList(sJob->job, eventTime);
 	EnqueueJob(sJob->job, eventTime);
 	UpdateServerUsage(sJob, server);
@@ -3565,8 +3597,8 @@ void MoveSchedJobState(SchedJob *sJob, int jStateNew, Server *server)
 	sJob->state = jStateNew;
 	if (jStateNew == JS_Running) {
 		InsertSJobByEndTime(sJob, sJobList);
-		sprintf(g_schedOps[g_logCnt].msg, "t: %10d job %5d on #%2d of server %s RUNNING\n", 
-			sJob->startTime, sJob->job->id, server->id, g_systemInfo.sTypes[server->type].name);
+		sprintf(g_schedOps[g_logCnt].msg, "job %d on %s %d RUNNING", 
+			sJob->job->id, g_systemInfo.sTypes[server->type].name, server->id);
 #ifdef DEBUG
 	fprintf(stdout, "JOB: %d -- Finish Time: %d\n", sJob->job->id, sJob->endTime);
 #endif
@@ -3575,8 +3607,8 @@ void MoveSchedJobState(SchedJob *sJob, int jStateNew, Server *server)
 	}
 	if (jStateNew == JS_Completed) {
 		AddSchedJobToEnd(sJob, sJobList);
-		sprintf(g_schedOps[g_logCnt].msg, "t: %10d job %5d on #%2d of server %s COMPLETED\n", 
-			sJob->endTime, sJob->job->id, server->id, g_systemInfo.sTypes[server->type].name);
+		sprintf(g_schedOps[g_logCnt].msg, "job %d on %s %d COMPLETED", 
+			sJob->job->id, g_systemInfo.sTypes[server->type].name, server->id);
 		g_schedOps[g_logCnt].time = sJob->endTime;
 		if (sJob->endTime > g_ss.actSimEndTime)	// keep track of the actual simulation end time
 			g_ss.actSimEndTime = sJob->endTime;
@@ -3643,8 +3675,11 @@ int PrintLog()
 	if (g_logCnt <= 0) return 0;
 	qsort(g_schedOps, g_logCnt, sizeof(Log), CmpLog);
 	for (i = 0; i < g_logCnt; i++)
-		if (simOpts[SO_Verbose].used != VERBOSE_STATS)
-			printf("%s", g_schedOps[i].msg);
+		if (simOpts[SO_Verbose].used != VERBOSE_STATS) {
+			//printf("%s", g_schedOps[i].msg);
+			strcpy(g_msgToPrint, g_schedOps[i].msg);
+			PrintMsg(g_schedOps[i].time);
+		}
 	
 	return g_schedOps[g_logCnt - 1].time;
 }
@@ -4231,6 +4266,7 @@ int SendResInfoByServer(int type, int id, ServerRes *resReq, int oldRESC)
 	char msgToSend[LARGE_BUF_SIZE];
 	char msgRcvd[LARGE_BUF_SIZE];
 	char curMsg[LARGE_BUF_SIZE];
+	char newMsg[XLARGE_BUF_SIZE];
 
 	if (oldRESC) {
 		availTime = GetServerAvailTime(type, id, resReq);
@@ -4266,13 +4302,18 @@ int SendResInfoByServer(int type, int id, ServerRes *resReq, int oldRESC)
 			sprintf(curMsg, "%s %d %s %d %d %d %d %d %d\n", FindResTypeNameByType(server->type), id, servStates[server->state].state, 
 				server->startTime, server->availCapa.cores, server->availCapa.mem, server->availCapa.disk, numWJobs, numRJobs);
 
-		if (strlen(g_bufferedMsg) + strlen(curMsg) > XLARGE_BUF_SIZE) {
+		if (g_batchMsg || strlen(g_bufferedMsg))
+			sprintf(newMsg, "%*s%s", (int)strlen(g_lastTimeStr) + (int)strlen("SENT "), "", curMsg);
+		else
+			strcpy(newMsg, curMsg);	// no indentation for the first message
+
+		if (strlen(g_bufferedMsg) + strlen(newMsg) > XLARGE_BUF_SIZE) {
 			g_batchMsg = ConcatBatchMsg(g_batchMsg, g_bufferedMsg);
-			g_batchMsg = ConcatBatchMsg(g_batchMsg, curMsg);
+			g_batchMsg = ConcatBatchMsg(g_batchMsg, newMsg);
 			g_bufferedMsg[0] = '\0';
 		}
-		else
-			strcat(g_bufferedMsg, curMsg);
+		else 
+			strcat(g_bufferedMsg, newMsg);
 	}
 
 	return ret;
@@ -4977,10 +5018,12 @@ int AssignToServer(SchedJob *sJob, Server *server, char *msg)
 	else
 		AddSchedJobToEnd(sJob, sJobList);
 	
-	if (simOpts[SO_Verbose].used != VERBOSE_STATS)
-		printf("t: %10d job %5d (%s) on #%2d of server %s (%s) %s\n", 
-			g_ss.curSimTime, sJob->job->id, jobStates[sJob->state].state, server->id, 
-			g_systemInfo.sTypes[server->type].name, servStates[server->state].state, msg);
+	if (simOpts[SO_Verbose].used != VERBOSE_STATS) {
+		sprintf(g_msgToPrint, "job %d (%s) on %s %d (%s) %s", 
+			sJob->job->id, jobStates[sJob->state].state, 
+			g_systemInfo.sTypes[server->type].name, server->id, servStates[server->state].state, msg);
+		PrintMsg(g_ss.curSimTime);
+	}
 		//* for debugging
 		/*printf("t: %10d job %5d (#cores: %2d, mem: %6d & disk: %6d, state: %d) on #%2d of server %s (state: %s) starting at %d - %d SCHEDULED\n", 
 			g_ss.curSimTime, sJob->job->id, sJob->job->resReq.cores, sJob->job->resReq.mem, sJob->job->resReq.disk, sJob->state,
@@ -4990,9 +5033,11 @@ int AssignToServer(SchedJob *sJob, Server *server, char *msg)
 	if (sJob->state == JS_Running || (server->state == SS_Booting && sJob->startTime != UNKNOWN)) {
 		UpdateServerCapacity(server, &sJob->job->resReq, DECREASE);
 		if (sJob->state == JS_Running) {
-			if (simOpts[SO_Verbose].used != VERBOSE_STATS)
-				printf("t: %10d job %5d on #%2d of server %s RUNNING\n", 
-					sJob->startTime, sJob->job->id, server->id, g_systemInfo.sTypes[server->type].name);
+			if (simOpts[SO_Verbose].used != VERBOSE_STATS) {
+				sprintf(g_msgToPrint, "job %d on %s %d RUNNING", 
+					sJob->job->id, g_systemInfo.sTypes[server->type].name, server->id);
+				PrintMsg(sJob->startTime);
+			}
 #ifdef DEBUG
 	fprintf(stdout, "JOB: %d -- Finish Time: %d\n", sJob->job->id, sJob->endTime);
 #endif
