@@ -37,7 +37,7 @@
 //#define DEBUG
 //#define FAIL_DEBUG
 
-#define VERSION						"14-Jan, 2024 @ MQ - client-server" 
+#define VERSION						"4-Apr, 2025 @ MQ - client-server" 
 #define DEVELOPERS					"Young Choon Lee, Young Ki Kim and Jayden King"
 
 // global variables
@@ -2961,7 +2961,7 @@ int HandleGETS(char *msgRcvd, char *msgToSend)
 	int ret = SendResInfo(msgRcvd);
 			
 	if (ret == UNDEFINED) 
-		sprintf(msgToSend, "ERR: invalid resource infomation query (%s)!", msgRcvd);
+		sprintf(msgToSend, "ERR: invalid resource information query (%s)!", msgRcvd);
 	else
 		strcpy(msgToSend, END_DATA);
 
@@ -3084,21 +3084,22 @@ int HandleENQJ(char *msgRcvd, char *msgToSend)
 	int numFields;
 	char qName[DEFAULT_BUF_SIZE];
 
-	numFields = sscanf(msgRcvd, "ENQJ %s", qName);
-	if (numFields < 1)
+	if ((numFields = GetArgCount(msgRcvd)) != 2)
 		strcpy(msgToSend, "ERR: invalid syntax (ENQJ queue_name)!");
-	else
-	if (strcmp(qName, GLOBAL_Q)) // currently only global queue is implemented
-		sprintf(msgToSend, "ERR: no such queue exists (%s)!", msgRcvd);
 	else {
-		if (!g_lastJobSent) 
-			strcpy(msgToSend, "ERR: no job to enqueue!");
-		else
-		{
-			EnqueueJob(g_lastJobSent, g_ss.curSimTime);
-			RemoveWaitingJob(g_lastJobSent->id);
-			g_lastJobSent = NULL;
-			strcpy(msgToSend, "OK");
+		sscanf(msgRcvd, "ENQJ %s", qName);
+		if (strcmp(qName, GLOBAL_Q)) // currently only global queue is implemented
+			sprintf(msgToSend, "ERR: no such queue exists (%s)!", msgRcvd);
+		else {
+			if (!g_lastJobSent) 
+				strcpy(msgToSend, "ERR: no job to enqueue!");
+			else
+			{
+				EnqueueJob(g_lastJobSent, g_ss.curSimTime);
+				RemoveWaitingJob(g_lastJobSent->id);
+				g_lastJobSent = NULL;
+				strcpy(msgToSend, "OK");
+			}
 		}
 	}
 
@@ -3110,19 +3111,20 @@ int HandleDEQJ(char *msgRcvd, char *msgToSend)
 	int qID, numFields;
 	char qName[DEFAULT_BUF_SIZE];
 	QueuedJob *qJob = NULL;
-
-	numFields = sscanf(msgRcvd, "DEQJ %s %d", qName, &qID);
-	if (numFields < 2)
+	
+	if ((numFields = GetArgCount(msgRcvd)) != 3)
 		strcpy(msgToSend, "ERR: invalid syntax (DEQJ queue_name q_ID)!");
-	else
-	if (!(qJob = DequeueJob(qID)))
-		sprintf(msgToSend, 
-			"ERR: no job in the queue ID of %d (current Q length: %d)!", 
-			qID, g_ss.globalQlength);
 	else {
-		AddToHeadWaitingJobQ(qJob->job, g_ss.curSimTime);
-		free(qJob);
-		strcpy(msgToSend, "OK");
+		sscanf(msgRcvd, "DEQJ %s %d", qName, &qID);
+		if (!(qJob = DequeueJob(qID)))
+			sprintf(msgToSend, 
+				"ERR: no job in the queue ID of %d (current Q length: %d)!", 
+				qID, g_ss.globalQlength);
+		else {
+			AddToHeadWaitingJobQ(qJob->job, g_ss.curSimTime);
+			free(qJob);
+			strcpy(msgToSend, "OK");
+		}
 	}
 
 	return TRUE;
@@ -3975,12 +3977,13 @@ int MigrateJob(char *msg)
 	Server *srcServer;
 	SchedJob *sJob, *dupSJob;
 	
-	numFields = sscanf(msg, "%s %d %s %d %s %d", cmd, &jID, srcSTypeName, &srcSID, tgtSTypeName, &tgtSID);
+	if ((numFields = GetArgCount(msg)) != 6)
+		return FALSE;
+	sscanf(msg, "%s %d %s %d %s %d", cmd, &jID, srcSTypeName, &srcSID, tgtSTypeName, &tgtSID);
 	srcSType = FindResTypeByName(srcSTypeName);
 	tgtSType = FindResTypeByName(tgtSTypeName);
 
-	if (numFields != 6 || 
-		(srcSType == UNDEFINED || tgtSType == UNDEFINED ||
+	if ((srcSType == UNDEFINED || tgtSType == UNDEFINED ||
 		IsOutOfBound(srcSID, 0, g_systemInfo.sTypes[srcSType].limit - 1, "Source Server ID") ||
 		IsOutOfBound(tgtSID, 0, g_systemInfo.sTypes[tgtSType].limit - 1, "Target Server ID")))
 		return FALSE;
@@ -4481,6 +4484,21 @@ int SendBatchMsg(char *cmd, int numMsgs)
 	return ret;
 }
 
+int GetArgCount(const char *str)
+{
+	int argCount = 0;
+	
+	while (*str) {
+		while (*str && isspace(*str)) str++;
+		if (*str) {
+			while (*str && !isspace(*str)) str++;
+			argCount++;
+		}
+	}
+	
+	return argCount;
+}
+
 /*
 GETS (formerly RESC) filter_cmd
 
@@ -4509,8 +4527,9 @@ int SendResInfo(char *msgRcvd)
 			int numFields, servType;
 			char servTypeName[LARGE_BUF_SIZE] = "";
 			
+			if ((numFields = GetArgCount(str)) != 2) return UNDEFINED;
 			numFields = sscanf(str, "%s %s", optStr, servTypeName);
-			if (numFields != 2) return UNDEFINED;
+			//if (numFields != 2) return UNDEFINED;
 			servType = FindResTypeByName(servTypeName);
 			if (servType == UNDEFINED) return UNDEFINED;
 			if (oldRESC && (ret = SendDataHeader("RESC", 1)) == INTACT_QUIT) return ret;
@@ -4521,8 +4540,9 @@ int SendResInfo(char *msgRcvd)
 			int numFields, servType, sID;
 			char servTypeName[LARGE_BUF_SIZE] = "";
 			
+			if ((numFields = GetArgCount(str)) != 3) return UNDEFINED;
 			numFields = sscanf(str, "%s %s %d", optStr, servTypeName, &sID);
-			if (numFields != 3) return UNDEFINED;
+			//if (numFields != 3) return UNDEFINED;
 			servType = FindResTypeByName(servTypeName);
 			if (servType == UNDEFINED) 
 			if (servType == UNDEFINED || sID < 0 || sID >= GetServerLimit(servType))
@@ -4536,9 +4556,10 @@ int SendResInfo(char *msgRcvd)
 			ServerRes resReq;
 			ServerRes *maxCapa = &g_systemInfo.sTypes[g_systemInfo.maxServType].capacity;
 			
+			if ((numFields = GetArgCount(str)) != 4) return UNDEFINED;
 			numFields = sscanf(str, "%s %d %d %d", optStr, &resReq.cores, &resReq.mem, &resReq.disk);
-			if (numFields != 4 || 
-				IsOutOfBound(resReq.cores, 1, maxCapa->cores, limits[CCnt_Limit].name) ||
+			//if (numFields != 4 || 
+			if (IsOutOfBound(resReq.cores, 1, maxCapa->cores, limits[CCnt_Limit].name) ||
 				IsOutOfBound(resReq.mem, MIN_MEM_PER_JOB_CORE, maxCapa->mem, limits[Mem_Limit].name) ||
 				IsOutOfBound(resReq.disk, MIN_DISK_PER_JOB_CORE, maxCapa->disk, limits[Disk_Limit].name))
 				return UNDEFINED;
@@ -4551,9 +4572,10 @@ int SendResInfo(char *msgRcvd)
 			ServerRes resReq;
 			ServerRes *maxCapa = &g_systemInfo.sTypes[g_systemInfo.maxServType].capacity;
 			
+			if ((numFields = GetArgCount(str)) != 4) return UNDEFINED;
 			numFields = sscanf(str, "%s %d %d %d", optStr, &resReq.cores, &resReq.mem, &resReq.disk);
-			if (numFields != 4 || 
-				IsOutOfBound(resReq.cores, 1, maxCapa->cores, limits[CCnt_Limit].name) ||
+			//if (numFields != 4 || 
+			if (IsOutOfBound(resReq.cores, 1, maxCapa->cores, limits[CCnt_Limit].name) ||
 				IsOutOfBound(resReq.mem, MIN_MEM_PER_JOB_CORE, maxCapa->mem, limits[Mem_Limit].name) ||
 				IsOutOfBound(resReq.disk, MIN_DISK_PER_JOB_CORE, maxCapa->disk, limits[Disk_Limit].name))
 				return UNDEFINED;
@@ -4566,9 +4588,10 @@ int SendResInfo(char *msgRcvd)
 			ServerRes resReq;
 			ServerRes *maxCapa = &g_systemInfo.sTypes[g_systemInfo.maxServType].capacity;
 
+			if ((numFields = GetArgCount(str)) != 4) return UNDEFINED;
 			numFields = sscanf(str, "%s %d %d %d", optStr, &resReq.cores, &resReq.mem, &resReq.disk);
-			if (numFields != 4 || 
-				IsOutOfBound(resReq.cores, 1, maxCapa->cores, limits[CCnt_Limit].name) ||
+			//if (numFields != 4 || 
+			if (IsOutOfBound(resReq.cores, 1, maxCapa->cores, limits[CCnt_Limit].name) ||
 				IsOutOfBound(resReq.mem, MIN_MEM_PER_JOB_CORE, maxCapa->mem, limits[Mem_Limit].name) ||
 				IsOutOfBound(resReq.disk, MIN_DISK_PER_JOB_CORE, maxCapa->disk, limits[Disk_Limit].name))
 				return UNDEFINED;
@@ -4621,9 +4644,10 @@ int SendJobsOnServer(char *msgRcvd)
 	int ret;
 	Server *server;
 
-	numFields = sscanf(msgRcvd, "LSTJ %s %d", servTypeName, &sID);	
-	if (numFields < 2 || 
-		(servType = FindResTypeByName(servTypeName)) == UNDEFINED ||
+	if ((numFields = GetArgCount(msgRcvd)) != 3)
+		return UNDEFINED;
+	sscanf(msgRcvd, "LSTJ %s %d", servTypeName, &sID);	
+	if ((servType = FindResTypeByName(servTypeName)) == UNDEFINED ||
 		IsOutOfBound(sID, 0, g_systemInfo.sTypes[servType].limit - 1, "Server ID"))
 		return UNDEFINED;
 
@@ -4684,6 +4708,8 @@ int ListQueuedJobs(char *msgRcvd, char*msgToSend)
 	int numFields, numMsgs = 0;
 	int ret;
 
+	if ((numFields = GetArgCount(msgRcvd)) != 3)
+		return UNDEFINED;
 	numFields = sscanf(msgRcvd, "LSTQ %s %d", qName, &qID);
 	if (strcmp(qName, GLOBAL_Q)) // currently only global queue is implemented
 		return UNDEFINED;
@@ -4740,9 +4766,10 @@ int SendJobCountOfServer(char *msgRcvd)
 	Server *server;
 	SchedJob **sJobs;
 
-	numFields = sscanf(msgRcvd, "CNTJ %s %d %d", servTypeName, &sID, &jState);
-	if (numFields < 3 || 
-		(servType = FindResTypeByName(servTypeName)) == UNDEFINED ||
+	if ((numFields = GetArgCount(msgRcvd)) != 4)
+		return UNDEFINED;
+	sscanf(msgRcvd, "CNTJ %s %d %d", servTypeName, &sID, &jState);
+	if ((servType = FindResTypeByName(servTypeName)) == UNDEFINED ||
 		IsOutOfBound(sID, 0, g_systemInfo.sTypes[servType].limit - 1, "Server ID") ||
 		IsOutOfBound(jState, 0, END_JOB_STATE, "Job state"))
 		return UNDEFINED;
@@ -4775,9 +4802,10 @@ int SendEstWTOfServer(char *msgRcvd)
 	Server *server;
 	SchedJob **sJobs;
 
+	if ((numFields = GetArgCount(msgRcvd)) != 3)
+		return UNDEFINED;
 	numFields = sscanf(msgRcvd, "EJWT %s %d", servTypeName, &sID);
-	if (numFields < 2 || 
-		(servType = FindResTypeByName(servTypeName)) == UNDEFINED ||
+	if ((servType = FindResTypeByName(servTypeName)) == UNDEFINED ||
 		IsOutOfBound(sID, 0, g_systemInfo.sTypes[servType].limit - 1, "Server ID"))
 		return UNDEFINED;
 
@@ -4807,9 +4835,10 @@ int TerminateServer(char *cmd)
 	int killedTime = g_ss.curSimTime;
 	Server *server;
 
+	if ((numFields = GetArgCount(cmd)) != 3)
+		return UNDEFINED;
 	numFields = sscanf(cmd, "TERM %s %d", servTypeName, &servID);
-	if (numFields < 2 || 
-		(servType = FindResTypeByName(servTypeName)) == UNDEFINED ||
+	if ((servType = FindResTypeByName(servTypeName)) == UNDEFINED ||
 		IsOutOfBound(servID, 0, g_systemInfo.sTypes[servType].limit - 1, "Server ID"))
 		return UNDEFINED;
 		
@@ -4884,9 +4913,10 @@ int KillJob(char *cmd)
 	Server *server;
 	SchedJob *sJob;
 
+	if ((numFields = GetArgCount(cmd)) != 4)
+		return UNDEFINED;
 	numFields = sscanf(cmd, "KILJ %s %d %d", servTypeName, &servID, &jID);
-	if (numFields < 3 || 
-		(servType = FindResTypeByName(servTypeName)) == UNDEFINED ||
+	if ((servType = FindResTypeByName(servTypeName)) == UNDEFINED ||
 		IsOutOfBound(servID, 0, g_systemInfo.sTypes[servType].limit - 1, "Server ID"))
 		return UNDEFINED;
 		

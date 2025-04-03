@@ -146,6 +146,7 @@ int SendResInfoByCapacity(ServerRes *resReq, int oldRESC);
 int SendResInfoByBounded(ServerRes *resReq, int oldRESC);
 void FinalizeBatchMsg();
 int SendBatchMsg(char *cmd, int numMsgs);
+int GetArgCount(const char *str);
 int SendResInfo(char *msgRcvd);
 int SendJobsPerStateOnServer(SchedJob *sJob);
 int SendJobsOnServer(char *msgRcvd);
