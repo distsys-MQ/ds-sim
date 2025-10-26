@@ -911,9 +911,9 @@ int HandleCmdArgs(int argc, char **argv)
 
 	// construct option string
 	for (i = 0; simOpts[i].desc; i++) {
-		sprintf(optStr, "%s%c", optStr, simOpts[i].optChar);
+		strncat(optStr, (char[]){simOpts[i].optChar, '\0'}, sizeof(optStr) - strlen(optStr) - 1);
 		if (simOpts[i].useArg)
-			strcat(optStr, ":");
+    	strncat(optStr, ":", sizeof(optStr) - strlen(optStr) - 1);
 	}
 
 	while ((c = getopt(argc, argv, optStr)) != -1)
