@@ -180,7 +180,7 @@ int PrintSchedJobs(Server *server, int jobState);
 void PrintStats();
 void FreeSystemInfo();
 void FreeWorkloadInfo();
-void FreeSchedJobs();
+void FreeSchedJobs(SchedJob *sJobs);
 void FreeAll();
 
 #endif

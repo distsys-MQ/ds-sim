@@ -8,6 +8,10 @@
 		+ the XML attribute name of server core count has changed to "cores" to be consistent with that for job requirement.
 		
 	TODO:
+		- make max lengths of data fields (e.g., server type name, hourly rate) consistent across the code base avoiding hardcoding
+			(e.g., RDF_Server_TypeName, RDF_Server_hourlyRate, etc.)
+			- this may be done by defining a struct for each command with the field names and their max lengths; 
+			  then, an array of such structs can be defined for each command (e.g., regular GETS, failure GETS, LSTJ and LSTQ) and used across the code base
 		- tidy up the main function w.r.t. different commands
 		- relative path for failure trace file and job file (mayby use of an env variable like CLASSPATH in Java)
 		- have an option for GETS to send the server state information that has changed since the last inquiry
@@ -37,7 +41,7 @@
 //#define DEBUG
 //#define FAIL_DEBUG
 
-#define VERSION						"4-Apr, 2025 @ MQ - client-server" 
+#define VERSION						"2-Apr, 2026 @ MQ" 
 #define DEVELOPERS					"Young Choon Lee, Young Ki Kim and Jayden King"
 
 // global variables
@@ -168,6 +172,7 @@ const SubOption getsOptions[] = {{GO_All, "All", 3},
 const DATAFieldSize regGETSFSizes[] = {{RDF_Server_TypeName, MAX_NAME_LENGTH}, 
 										{RDF_Server_ID, 3}, 
 										{RDF_Server_State, 12}, 
+										{RDF_Server_hourlyRate, 10},
 										{RDF_Server_StartTime, 6}, 
 										{RDF_Server_Core, 3}, 
 										{RDF_Server_Memory, 7}, 
@@ -901,7 +906,7 @@ inline int IsOutOfBound(int value, long int min, long int max, char *message)
 
 int HandleCmdArgs(int argc, char **argv)
 {
-	int c, i;
+	int c, i, j;
 	int retValue;
 	char optStr[LARGE_BUF_SIZE] = "";
 	int optlen;
@@ -909,12 +914,14 @@ int HandleCmdArgs(int argc, char **argv)
 	opterr = 0;
 	errno = 0;
 
-	// construct option string
-	for (i = 0; simOpts[i].desc; i++) {
-		sprintf(optStr, "%s%c", optStr, simOpts[i].optChar);
+	// construct option string for getopt based on simOpts
+	for (i = j = 0; simOpts[i].desc; i++) {
+		optStr[j++] = simOpts[i].optChar;
 		if (simOpts[i].useArg)
-			strcat(optStr, ":");
+			optStr[j++] = ':';
 	}
+	optStr[j] = '\0';
+
 
 	while ((c = getopt(argc, argv, optStr)) != -1)
 		switch (c)
@@ -4158,7 +4165,7 @@ int SendDataHeader(char *cmd, int nRecs)
 {
 	char msgToSend[LARGE_BUF_SIZE];
 	char msgRcvd[LARGE_BUF_SIZE];
-	int recLen;	// record length
+	int recLen = 0;	// record length
 	int ret;
 
 	if (!strcmp(cmd, "RESC"))
@@ -4263,6 +4270,7 @@ char *ConcatBatchMsg(char *dest, char *src)
 int SendResInfoByServer(int type, int id, ServerRes *resReq, int oldRESC)
 {
 	Server *server = GetServer(type, id);
+	ServerTypeProp *sTypes = g_systemInfo.sTypes;
 	int availTime = UNKNOWN; // for RESC
 	int numWJobs, numRJobs;
 	int ret = TRUE; // 1 as the number of messages sent
@@ -4296,14 +4304,14 @@ int SendResInfoByServer(int type, int id, ServerRes *resReq, int oldRESC)
 		numWJobs = CountJobs(*GetSchedJobList(JS_Waiting, server));
 		numRJobs = CountJobs(*GetSchedJobList(JS_Running, server));
 		if (g_systemInfo.rFailT)
-			sprintf(curMsg, "%s %d %s %d %d %d %d %d %d %d %d %d %d %d %d\n", FindResTypeNameByType(server->type), id, 
-				servStates[server->state].state, server->startTime, 
+			sprintf(curMsg, "%s %d %.2f %s %d %d %d %d %d %d %d %d %d %d %d %d\n", FindResTypeNameByType(server->type), id, 
+				sTypes[server->type].rate,servStates[server->state].state, server->startTime, 
 				server->availCapa.cores, server->availCapa.mem, server->availCapa.disk, 
 				numWJobs, numRJobs, server->failInfo.numFails, server->failInfo.totalFailTime, 
 				server->failInfo.mttf, server->failInfo.mttr, server->failInfo.madf, server->failInfo.lastOpTime);
 		else
-			sprintf(curMsg, "%s %d %s %d %d %d %d %d %d\n", FindResTypeNameByType(server->type), id, servStates[server->state].state, 
-				server->startTime, server->availCapa.cores, server->availCapa.mem, server->availCapa.disk, numWJobs, numRJobs);
+			sprintf(curMsg, "%s %d %.2f %s %d %d %d %d %d %d\n", FindResTypeNameByType(server->type), id, sTypes[server->type].rate, 
+				servStates[server->state].state, server->startTime, server->availCapa.cores, server->availCapa.mem, server->availCapa.disk, numWJobs, numRJobs);
 
 		if (g_batchMsg || strlen(g_bufferedMsg))
 			sprintf(newMsg, "%*s%s", (int)strlen(g_lastTimeStr) + (int)strlen("SENT "), "", curMsg);
