@@ -107,7 +107,7 @@ enum ResFailureModel {FM_Teragrid, FM_ND07CPU, FM_Websites02, FM_LDNS04, FM_PL05
 
 enum SchdStatus {SCHD_Valid, SCHD_InvalidJob, SCHD_InvalidServType, SCHD_InvalidServID, SCHD_ServUnavailable, SCHD_ServIncapable, END_SCHD_STATUS};
 
-enum RegularGETSFieldID {RDF_Server_TypeName, RDF_Server_ID, RDF_Server_State, 
+enum RegularGETSFieldID {RDF_Server_TypeName, RDF_Server_ID, RDF_Server_hourlyRate, RDF_Server_State, 
 							RDF_Server_StartTime, RDF_Server_Core, RDF_Server_Memory, RDF_Server_Disk, 
 							RDF_Num_WaitingJobs, RDF_Num_RunningJobs, END_RDF};
 enum FailureGETSFieldID {FDF_Num_Failures, FDF_Total_FailTime, FDF_MTTF, FDF_MTTR, 
