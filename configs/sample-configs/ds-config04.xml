@@ -4,9 +4,9 @@
   <servers>
     <server type="small" limit="12" bootupTime="70" hourlyRate="0.2" cores="2" memory="4000" disk="16000" relSpeed="1.0"/>
     <server type="medium" limit="8" bootupTime="50" hourlyRate="0.4" cores="4" memory="16000" disk="64000" relSpeed="1.2"/>
-    <server type="large" limit="12" bootupTime="90" hourlyRate="0.8" cores="16" memory="64000" disk="512000" relSpeed="1.4/>
-    <server type="MQ_Cloud_large" limit="8" bootupTime="60" hourlyRate="0.6" cores="8" memory="32000" disk="256000" relSpeed="1.6/>
-    <server type="very_very_very_very_very_very_large" limit="20" bootupTime="130" hourlyRate="3.2" cores="64" memory="256000" disk="2049000" relSpeed="2.0/>
+    <server type="large" limit="12" bootupTime="90" hourlyRate="0.8" cores="16" memory="64000" disk="512000" relSpeed="1.4"/>
+    <server type="MQ_Cloud_large" limit="8" bootupTime="60" hourlyRate="0.6" cores="8" memory="32000" disk="256000" relSpeed="1.6"/>
+    <server type="very_very_very_very_very_very_large" limit="20" bootupTime="130" hourlyRate="3.2" cores="64" memory="256000" disk="2049000" relSpeed="2.0"/>
   </servers>
   <jobs>
     <job type="short" minRunTime="34" maxRunTime="198" populationRate="30" />
