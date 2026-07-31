@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- variant generated from the corresponding sample configuration -->
+<config randomSeed="4096">
+  <servers>
+    <server type="offload" limit="2" bootupTime="50" hourlyRate="0.2" cores="2" memory="4000" disk="16000" relSpeed="1.0"/>
+    <server type="highway" limit="2" bootupTime="50" hourlyRate="0.4" cores="4" memory="16000" disk="64000" relSpeed="1.5"/>
+    <server type="silkroad" limit="2" bootupTime="90" hourlyRate="1.2" cores="16" memory="128000" disk="512000" relSpeed="2.0"/>
+  </servers>
+  <jobs>
+    <job type="short" minRunTime="60" maxRunTime="330" populationRate="30" />
+    <job type="medium" minRunTime="331" maxRunTime="1980" populationRate="50" />
+    <job type="long" minRunTime="1981" maxRunTime="7200" populationRate="20" />
+  </jobs>
+  <workload type="moderate-high" minLoad="55" maxLoad="85" />
+  <termination>
+    <condition type="endtime" value="100000" />
+    <condition type="jobcount" value="50" />
+  </termination>
+</config>

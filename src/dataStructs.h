@@ -14,6 +14,8 @@
 #define INTACT_QUIT					-9
 #define CMD_LENGTH					4
 #define MAX_NAME_LENGTH				(64 + 1)
+#define MAX_SERVER_TYPES			100
+#define MAX_SERVER_CNT				1000
 #define SERVER_TYPE_LENGTH			MAX_NAME_LENGTH
 #define JOB_TYPE_LENGTH				MAX_NAME_LENGTH
 #define NUM_RES_FAILURE_FIELDS		4
@@ -73,14 +75,14 @@
 enum Verbose {VERBOSE_NONE, VERBOSE_STATS, VERBOSE_JOBS, VERBOSE_BRIEF, VERBOSE_ALL, END_VERBOSE};
 
 enum Sim_Command {CMD_HELO, CMD_AUTH, CMD_OK, CMD_ERR, CMD_REDY, CMD_PSHJ, CMD_JOBN, CMD_JOBP, CMD_NONE, \
-				CMD_GETS, CMD_RESC, CMD_SCHD, CMD_JCPL, CMD_RESF, CMD_RESR, CMD_LSTJ, CMD_LSTQ, CMD_CNTJ, \
-				CMD_MIGJ, CMD_EJWT, CMD_TERM, CMD_KILJ, CMD_ENQJ, CMD_DEQJ, CMD_QUIT, END_SIM_CMD};
+				CMD_GETS, CMD_RESC, CMD_SPEC, CMD_SCHD, CMD_JCPL, CMD_RESF, CMD_RESR, CMD_LSTJ, CMD_LSTQ, \
+				CMD_CNTJ, CMD_MIGJ, CMD_EJWT, CMD_TERM, CMD_KILJ, CMD_ENQJ, CMD_DEQJ, CMD_QUIT, END_SIM_CMD};
 				
 enum Cmd_Issuer {CI_Client, CI_Server, CI_Both, END_CI};
 
 enum LimitName {Port_Limit, JCnt_Limit, JRunTime_Limit, JPop_Limit, SEnd_Limit, 
 				SType_Limit, Res_Limit, SBootTime_Limit, SHourlyRate_Limit, RSeed_Limit, T_Grain_Limit, F_Scale_Limit, 
-				CCnt_Limit, Mem_Limit, Disk_Limit, WMinLoad_Limit, WMaxLoad_Limit, JType_Limit, WorkloadTime_Limit};
+				CCnt_Limit, Mem_Limit, Disk_Limit, RelSpeed_Limit, WMinLoad_Limit, WMaxLoad_Limit, JType_Limit, WorkloadTime_Limit};
 
 enum SimulationOption {SO_BreakPoint, SO_Config, SO_Duration, SO_Failure, SO_Granularity, SO_Help, SO_Interactive,
 				SO_JobCount, SO_Limit, SO_Newline, SO_OmitFailMsg, SO_Port, SO_RandomSeed, SO_Scale, SO_Verbose, END_SIM_OPTION};
@@ -101,17 +103,22 @@ enum ServerState {SS_Inactive, SS_Booting, SS_Idle, SS_Active, SS_Unavailable, E
 
 enum GETS_Option {GO_All, GO_Type, GO_One, GO_Avail, GO_Capable, GO_Bounded, GO_END};	// GETS stands for GET Server info
 
+enum SPEC_Option {SP_All, SP_Type, SP_END};	
+
 enum ResFailureEvent {RES_Failure, RES_Recovery};
 
 enum ResFailureModel {FM_Teragrid, FM_ND07CPU, FM_Websites02, FM_LDNS04, FM_PL05, FM_G5K06, END_FAILURE_MODEL}; 
 
 enum SchdStatus {SCHD_Valid, SCHD_InvalidJob, SCHD_InvalidServType, SCHD_InvalidServID, SCHD_ServUnavailable, SCHD_ServIncapable, END_SCHD_STATUS};
 
-enum RegularGETSFieldID {RDF_Server_TypeName, RDF_Server_ID, RDF_Server_hourlyRate, RDF_Server_State, 
+enum RegularGETSFieldID {RDF_Server_TypeName, RDF_Server_ID, RDF_Server_State, 
 							RDF_Server_StartTime, RDF_Server_Core, RDF_Server_Memory, RDF_Server_Disk, 
-							RDF_Num_WaitingJobs, RDF_Num_RunningJobs, END_RDF};
+							RDF_Server_Num_WaitingJobs, RDF_Server_Num_RunningJobs, END_RDF};
 enum FailureGETSFieldID {FDF_Num_Failures, FDF_Total_FailTime, FDF_MTTF, FDF_MTTR, 
 							FDF_MADF, FDF_Last_OpTime, END_FDF};
+
+enum SPECFieldID {SDF_Server_TypeName, SDF_Server_Limit, SDF_Server_Core, SDF_Server_Memory, SDF_Server_Disk, 
+					SDF_Server_RelSpeed, SDF_Server_BootupTime, SDF_Server_hourlyRate, END_SDF};
 
 enum LSTJFieldID {LJ_Job_ID, LJ_Job_State, LJ_SubmitTime, LJ_StartTime, LJ_Est_RunTime, LJ_Job_Core, LJ_Job_Memory, LJ_Job_Disk, END_LJ};
 
@@ -124,6 +131,7 @@ typedef struct {
 	long int min;
 	long int max;
 	long int def;
+	int fieldLen; // the max length of the string representation of the limit value
 } Limit;
 		
 typedef struct {
@@ -167,7 +175,7 @@ typedef struct {
 	int type;
 	int submitTime;
 	int estRunTime;
-	int actRunTime;
+	int realRunTime;
 	ServerRes	resReq;
 } Job;
 

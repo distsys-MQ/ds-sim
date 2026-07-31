@@ -8,10 +8,6 @@
 		+ the XML attribute name of server core count has changed to "cores" to be consistent with that for job requirement.
 		
 	TODO:
-		- make max lengths of data fields (e.g., server type name, hourly rate) consistent across the code base avoiding hardcoding
-			(e.g., RDF_Server_TypeName, RDF_Server_hourlyRate, etc.)
-			- this may be done by defining a struct for each command with the field names and their max lengths; 
-			  then, an array of such structs can be defined for each command (e.g., regular GETS, failure GETS, LSTJ and LSTQ) and used across the code base
 		- tidy up the main function w.r.t. different commands
 		- relative path for failure trace file and job file (mayby use of an env variable like CLASSPATH in Java)
 		- have an option for GETS to send the server state information that has changed since the last inquiry
@@ -41,7 +37,7 @@
 //#define DEBUG
 //#define FAIL_DEBUG
 
-#define VERSION						"2-Apr, 2026 @ MQ" 
+#define VERSION						"03-Jul, 2026 @ MQ" 
 #define DEVELOPERS					"Young Choon Lee, Young Ki Kim and Jayden King"
 
 // global variables
@@ -58,8 +54,9 @@ Command cmds[] = {	// only those that need to be explicitly processed/handled
 	{CMD_QUIT, "QUIT", CI_Both, "terminating simulation", NULL},
 	{CMD_REDY, "REDY", CI_Client, "ready to handle a server message (job submission/completion)", HandleREDY},
 	{CMD_PSHJ, "PSHJ", CI_Client, "push the current job after the next job or increment submission time by 1 if it is the last job", HandlePSHJ},
-	{CMD_GETS, "GETS", CI_Client, "get server state information", HandleGETS},
+	{CMD_GETS, "GETS", CI_Client, "get server state information (dynamic properties)", HandleGETS},
 	{CMD_RESC, "RESC", CI_Client, "old version of GETS (for backward compatibility)", HandleGETS},
+	{CMD_SPEC, "SPEC", CI_Client, "get server specification (static properties)", HandleSPEC},
 	{CMD_SCHD, "SCHD", CI_Client, "scheduling decision", HandleSCHD},
 	{CMD_JCPL, "JCPL", CI_Server, "job completion", HandleJCPL},
 	{CMD_LSTJ, "LSTJ", CI_Client, "list of running and waiting jobs on a specified server", HandleLSTJ},
@@ -75,26 +72,27 @@ Command cmds[] = {	// only those that need to be explicitly processed/handled
 char *issuers[] = {"Client", "Server", "Both"};
 
 Limit limits[] = {
-					{"TCP/IP port range", 49152, 65535, DEFAULT_PORT},
-					{"Max Job count", 1, MAX_JOB_CNT, DEFAULT_JOB_CNT},
-					{"Job run time", 1, MAX_JOB_RUNTIME, MAX_JOB_RUNTIME},	
-					{"Job population rate", 1, 100, 10},
-					{"Simulation end time", 1, MAX_SIM_END_TIME, MAX_SIM_END_TIME},
-					{"The number of server types", 1, 100, END_SERVER_TYPE},
-					{"Resource limit (#servers/type)", 1, 1000, 20},
-					{"Server bootup time", 0, 600, DEFAULT_BOOTUP_TIME},	// instant - 10 mins
-					{"Hourly rental rate", 0, MAX_HOURLY_RATE, DEFAULT_HOURLY_RATE},
-					{"Random seed limit", 1, UINT_MAX, DEFAULT_RND_SEED},
-					{"Server failure time granularity", MIN_IN_SECONDS, HOUR_IN_SECONDS, DEFAULT_RES_FAIL_T_GRAIN},
-					{"Server failure scale factor", 1, 100, 100},	// in percentage with respect to the original failure distribution
-					{"Core count limit", 1, 1024, 4},
-					{"Memory limit", 1000, 2147483647, 32000},
-					{"Disk limit", 1000, 2147483647, 64000},
-					{"Min load limit", 1, 99, 10},
-					{"Max load limit", 1, 100, 90},
-					{"Job type limit", 1, CHAR_MAX, END_JOB_TYPE},
-					{"Time limit of load state", HOUR_IN_SECONDS, TWELVE_HOURS, HOUR_IN_SECONDS},
-					{NULL, 0, 0, 0}
+					{"TCP/IP port range", 49152, 65535, DEFAULT_PORT, 5},
+					{"Max Job count", 1, MAX_JOB_CNT, DEFAULT_JOB_CNT, 7},
+					{"Job run time", 1, MAX_JOB_RUNTIME, MAX_JOB_RUNTIME, 6},
+					{"Job population rate", 1, 100, 10, 3},
+					{"Simulation end time", 1, MAX_SIM_END_TIME, MAX_SIM_END_TIME, 7},
+					{"The number of server types", 1, MAX_SERVER_TYPES, END_SERVER_TYPE, 3},
+					{"Resource limit (#servers/type)", 1, MAX_SERVER_CNT, 20, 4},
+					{"Server bootup time", 0, 600, DEFAULT_BOOTUP_TIME, 3},	// instant - 10 mins
+					{"Hourly rental rate", 0, MAX_HOURLY_RATE, DEFAULT_HOURLY_RATE, 10},
+					{"Random seed limit", 1, UINT_MAX, DEFAULT_RND_SEED, 10},
+					{"Server failure time granularity", MIN_IN_SECONDS, HOUR_IN_SECONDS, DEFAULT_RES_FAIL_T_GRAIN, 4},
+					{"Server failure scale factor", 1, 100, 100, 3},	// in percentage with respect to the original failure distribution
+					{"Core count limit", 1, 1024, 4, 4},
+					{"Memory limit", 1000, 2147483647, 32000, 10},
+					{"Disk limit", 1000, 2147483647, 64000, 10},
+					{"Relative speed limit", 1, MAX_REL_SPEED, 1, 3},
+					{"Min load limit", 1, 99, 10, 2},
+					{"Max load limit", 1, 100, 90, 3},
+					{"Job type limit", 1, CHAR_MAX, END_JOB_TYPE, 1},
+					{"Time limit of load state", HOUR_IN_SECONDS, TWELVE_HOURS, HOUR_IN_SECONDS, 5},
+					{NULL, 0, 0, 0, 0}
 				};
 		
 SimOption simOpts[] = {
@@ -169,16 +167,18 @@ const SubOption getsOptions[] = {{GO_All, "All", 3},
 								{GO_Capable, "Capable", 7},
 								{GO_Bounded, "Bounded", 7}};
 
+const SubOption specOptions[] = {{SP_All, "All", 3}, 
+								{SP_Type, "Type", 4}};
+
 const DATAFieldSize regGETSFSizes[] = {{RDF_Server_TypeName, MAX_NAME_LENGTH}, 
 										{RDF_Server_ID, 3}, 
 										{RDF_Server_State, 12}, 
-										{RDF_Server_hourlyRate, 10},
 										{RDF_Server_StartTime, 6}, 
 										{RDF_Server_Core, 3}, 
 										{RDF_Server_Memory, 7}, 
 										{RDF_Server_Disk, 7}, 
-										{RDF_Num_WaitingJobs, 6}, 
-										{RDF_Num_RunningJobs, 6}};
+										{RDF_Server_Num_WaitingJobs, 6}, 
+										{RDF_Server_Num_RunningJobs, 6}};
 
 const DATAFieldSize failGETSFSizes[] = {{FDF_Num_Failures, 6}, 
 										{FDF_Total_FailTime, 6}, 
@@ -187,6 +187,15 @@ const DATAFieldSize failGETSFSizes[] = {{FDF_Num_Failures, 6},
 										{FDF_MADF, 6}, 
 										{FDF_Last_OpTime, 6}};
 
+const DATAFieldSize SPECFSizes[] = {{SDF_Server_TypeName, MAX_NAME_LENGTH}, 
+										{SDF_Server_Limit, 4},
+										{SDF_Server_Core, 3}, 
+										{SDF_Server_Memory, 7}, 
+										{SDF_Server_Disk, 7}, 
+										{SDF_Server_RelSpeed, 6}, 
+										{SDF_Server_BootupTime, 3}, 
+										{SDF_Server_hourlyRate, 10}};
+										
 const DATAFieldSize LSTJFSizes[] = {{LJ_Job_ID, 6}, 
 										{LJ_Job_State, 10},
 										{LJ_SubmitTime, 6}, 										
@@ -1221,6 +1230,7 @@ int StoreServerType(xmlNode *node)
 {
 	ServerTypeProp *sTypes = g_systemInfo.sTypes;
 	int i, retValue, nsTypes = g_systemInfo.numServTypes;
+	float fRetVal;
 	static int maxCoreCnt = 0;
 	ServerRes *capacity;
 	
@@ -1252,9 +1262,10 @@ int StoreServerType(xmlNode *node)
 		return FALSE;
 	sTypes[i].bootupTime = retValue;
 	
-	if ((sTypes[i].rate = GetFloatValue((char *)xmlGetProp(node, (xmlChar *)"hourlyRate"), "Server rental rate")) == UNDEFINED ||
-		IsOutOfBound(retValue, limits[SHourlyRate_Limit].min, limits[SHourlyRate_Limit].max, limits[SHourlyRate_Limit].name))
+	if ((fRetVal = GetFloatValue((char *)xmlGetProp(node, (xmlChar *)"hourlyRate"), "Server rental rate")) == UNDEFINED ||
+		IsOutOfBound(fRetVal, limits[SHourlyRate_Limit].min, limits[SHourlyRate_Limit].max, limits[SHourlyRate_Limit].name))
 		return FALSE;
+	sTypes[i].rate = fRetVal;
 	
 	capacity = &sTypes[i].capacity;
 	
@@ -1279,8 +1290,13 @@ int StoreServerType(xmlNode *node)
 		IsOutOfBound(retValue, limits[Disk_Limit].min, limits[Disk_Limit].max, limits[Disk_Limit].name))
 		return FALSE;
 	capacity->disk = retValue;
-	
-	capacity->relSpeed = 1.0f;
+
+	if ((fRetVal = GetFloatValue((char *)xmlGetProp(node, (xmlChar *)"relSpeed"), "The relative speed")) == UNDEFINED || 
+		IsOutOfBound(fRetVal, limits[RelSpeed_Limit].min, limits[RelSpeed_Limit].max, limits[RelSpeed_Limit].name)) {
+		capacity->relSpeed = limits[RelSpeed_Limit].def; // default value (i.e., 1.0) if not specified or invalid
+	}
+	else
+		capacity->relSpeed = fRetVal;
 	
 	g_systemInfo.numServTypes++;
 	
@@ -1963,6 +1979,7 @@ void SetServerRes(ServerRes *tgtSRes, ServerRes *srcSRes)
 	tgtSRes->cores = srcSRes->cores;
 	tgtSRes->mem = srcSRes->mem;
 	tgtSRes->disk = srcSRes->disk;
+	tgtSRes->relSpeed = srcSRes->relSpeed;
 }
 
 void InitServers(Server *servers, ServerTypeProp *sType)
@@ -2174,7 +2191,9 @@ long int CalcTotalCoreUsage(int submitTime, Job *jobs, int jID)
 	for (i = 0; i < jID; i++) {
 		Job *job = &jobs[i];
 		int j;
-		int completionTime = job->submitTime + job->actRunTime;
+		// relative speed of servers is not considered in the calculation of load 
+		//as it is not known which server type the job is running on
+		int completionTime = job->submitTime + job->realRunTime;
 		
 		if (completionTime <= submitTime) continue;	// skip
 
@@ -2220,7 +2239,9 @@ int CalcLocalCurLoad(int submitTime, Job *jobs, int jID)
 	for (i = 0; i < jID; i++) {
 		Job *job = &jobs[i];
 		int j;
-		int completionTime = job->submitTime + job->actRunTime;
+		// relative speed of servers is not considered in the calculation of load 
+		//as it is not known which server type the job is running on
+		int completionTime = job->submitTime + job->realRunTime; 
 		
 		if (completionTime <= submitTime) continue;	// skip
 
@@ -2311,8 +2332,8 @@ int GetJobTypeByName(char *jobType)
 	return jType;
 }
 
-// actRuntime is set to estRuntime in the existence of job list file
-//<job id="0" type="long" submitTime="83" estRunTime="37232" [actRunTime=""] cores="2" memory="500" disk="600" />
+// realRunTime is set to estRuntime in the existence of job list file
+//<job id="0" type="long" submitTime="83" estRunTime="37232" [realRunTime=""] cores="2" memory="500" disk="600" />
 int LoadJobs(xmlNode *node)
 {
 	xmlNode *curNode;
@@ -2338,13 +2359,13 @@ int LoadJobs(xmlNode *node)
 				if ((retValue = GetIntValue((char *)xmlGetProp(curNode, (xmlChar *)"estRunTime"), "Invalid estimated run time")) == UNDEFINED)
 					return FALSE;
 				job->estRunTime = retValue;
-				if (!(char *)xmlGetProp(curNode, (xmlChar *)"actRunTime"))	// if no actRunTime is specified, use estRunTime for actRunTime
-					job->actRunTime = job->estRunTime;
+				if (!(char *)xmlGetProp(curNode, (xmlChar *)"realRunTime"))	// if no realRunTime is specified, use estRunTime for realRunTime
+					job->realRunTime = job->estRunTime;
 				else
 				{
-					if ((retValue = GetIntValue((char *)xmlGetProp(curNode, (xmlChar *)"actRunTime"), "Invalid actual run time")) == UNDEFINED) 
+					if ((retValue = GetIntValue((char *)xmlGetProp(curNode, (xmlChar *)"realRunTime"), "Invalid real run time")) == UNDEFINED) 
 						return FALSE;
-					job->actRunTime = retValue;
+					job->realRunTime = retValue;
 				}
 				if ((retValue = GetIntValue((char *)xmlGetProp(curNode, (xmlChar *)"cores"), "Invalid core count")) == UNDEFINED)
 					return FALSE;
@@ -2412,21 +2433,8 @@ int ComputeJobCoreReq(ServerRes *maxCapa, int loadTooLow)
 void GenerateJobResReq(Job *job, ServerRes *maxCapa, int curLoad, int targetLoad, int loadTooLow)
 {
 	ServerRes *resReq = &job->resReq;
-	//int actRunTime = job->actRunTime;
-	//int estError;
 
 	resReq->cores = ComputeJobCoreReq(maxCapa, loadTooLow);
-	/*
-	// #cores is determined by primarily the target load range (minLoad and maxLoad)
-	if (curLoad < targetLoad) 	// when load is below the min load, set #cores at least the half of max #cores
-		resReq->cores = rand() % maxCapa->cores + 1;
-	else {	// otherwise #cores is relative to job type (i.e., runtime)
-		resReq->cores = MIN(MAX(1, ROUND((float)MIN(HOUR_IN_SECONDS, actRunTime) / (MIN_IN_SECONDS * 10))), maxCapa->cores);
-		estError = rand() % (resReq->cores * 2);
-		resReq->cores = rand() % 2 == 0 ? MAX(1, resReq->cores - estError) : MIN(resReq->cores + estError, maxCapa->cores);
-	}
-	*/
-	//resReq->cores = rand() % maxCapa->cores + 1;
 	resReq->mem = (MIN_MEM_PER_JOB_CORE + rand() % ((1 + resReq->cores / 10) * MIN_MEM_PER_CORE)) * resReq->cores;
 	resReq->mem -= resReq->mem % 100; 	// truncate tens and ones to make it in hundreds
 	resReq->mem = MIN(resReq->mem, maxCapa->mem);
@@ -2437,12 +2445,12 @@ void GenerateJobResReq(Job *job, ServerRes *maxCapa, int curLoad, int targetLoad
 
 void GenerateJobRuntimes(Job *job, int jType, JobTypeProp *jobTypes)
 {
-	int estRunTime, actRunTime, estError;
+	int estRunTime, realRunTime, estError;
 	
-	actRunTime = jobTypes[jType].min + rand() % (MAX(1, jobTypes[jType].max - jobTypes[jType].min));
-	job->actRunTime = actRunTime;
-	estError = rand() % actRunTime;
-	estRunTime = rand() % 2 == 0 ? actRunTime - estError : BOUND_INT_MAX(actRunTime + estError);
+	realRunTime = jobTypes[jType].min + rand() % (MAX(1, jobTypes[jType].max - jobTypes[jType].min));
+	job->realRunTime = realRunTime;
+	estError = rand() % realRunTime;
+	estRunTime = rand() % 2 == 0 ? realRunTime - estError : BOUND_INT_MAX(realRunTime + estError);
 	job->estRunTime = estRunTime;
 }
 
@@ -2603,10 +2611,10 @@ void WriteJobs()
 		Job *job = &g_workloadInfo.jobs[i];
 		ServerRes *resReq = &job->resReq;
 #ifdef JOB		
-		fprintf(f, "\t<job id=\"%d\" type=\"%s\" submitTime=\"%d\" estRunTime=\"%d\" actRunTime=\"%d\" \
+		fprintf(f, "\t<job id=\"%d\" type=\"%s\" submitTime=\"%d\" estRunTime=\"%d\" realRunTime=\"%d\" \
 cores=\"%d\" memory=\"%d\" disk=\"%d\" />\n", 
 			job->id, g_workloadInfo.jobTypes[job->type].name, job->submitTime, 
-			job->estRunTime, job->actRunTime, resReq->cores, resReq->mem, resReq->disk);
+			job->estRunTime, job->realRunTime, resReq->cores, resReq->mem, resReq->disk);
 #else
 		fprintf(f, "\t<job id=\"%d\" type=\"%s\" submitTime=\"%d\" estRunTime=\"%d\" \
 cores=\"%d\" memory=\"%d\" disk=\"%d\" />\n", 
@@ -2969,6 +2977,18 @@ int HandleGETS(char *msgRcvd, char *msgToSend)
 			
 	if (ret == UNDEFINED) 
 		sprintf(msgToSend, "ERR: invalid resource information query (%s)!", msgRcvd);
+	else
+		strcpy(msgToSend, END_DATA);
+
+	return TRUE;
+}
+
+int HandleSPEC(char *msgRcvd, char *msgToSend)
+{
+	int ret = SendServerSpec(msgRcvd);
+			
+	if (ret == UNDEFINED) 
+		sprintf(msgToSend, "ERR: invalid server specification query (%s)!", msgRcvd);
 	else
 		strcpy(msgToSend, END_DATA);
 
@@ -3653,7 +3673,7 @@ void UpdateServerCapacity(Server *server, ServerRes *resReq, int op)
 inline void SetSJobTimes(SchedJob *sJob, int startTime)
 {
 	sJob->startTime = startTime;
-	sJob->endTime = startTime + sJob->job->actRunTime;
+	sJob->endTime = startTime + CalcActJobRunTime(sJob->job, sJob->sType);
 }
 
 // currently, only the first job in the queue is checked; i.e., no backfilling is supported
@@ -4270,7 +4290,6 @@ char *ConcatBatchMsg(char *dest, char *src)
 int SendResInfoByServer(int type, int id, ServerRes *resReq, int oldRESC)
 {
 	Server *server = GetServer(type, id);
-	ServerTypeProp *sTypes = g_systemInfo.sTypes;
 	int availTime = UNKNOWN; // for RESC
 	int numWJobs, numRJobs;
 	int ret = TRUE; // 1 as the number of messages sent
@@ -4304,14 +4323,17 @@ int SendResInfoByServer(int type, int id, ServerRes *resReq, int oldRESC)
 		numWJobs = CountJobs(*GetSchedJobList(JS_Waiting, server));
 		numRJobs = CountJobs(*GetSchedJobList(JS_Running, server));
 		if (g_systemInfo.rFailT)
-			sprintf(curMsg, "%s %d %.2f %s %d %d %d %d %d %d %d %d %d %d %d %d\n", FindResTypeNameByType(server->type), id, 
-				sTypes[server->type].rate,servStates[server->state].state, server->startTime, 
+			sprintf(curMsg, "%s %d %s %d %d %d %d %d %d %d %d %d %d %d %d\n", FindResTypeNameByType(server->type), id, 
+				servStates[server->state].state, server->startTime, 
 				server->availCapa.cores, server->availCapa.mem, server->availCapa.disk, 
 				numWJobs, numRJobs, server->failInfo.numFails, server->failInfo.totalFailTime, 
 				server->failInfo.mttf, server->failInfo.mttr, server->failInfo.madf, server->failInfo.lastOpTime);
 		else
-			sprintf(curMsg, "%s %d %.2f %s %d %d %d %d %d %d\n", FindResTypeNameByType(server->type), id, sTypes[server->type].rate, 
-				servStates[server->state].state, server->startTime, server->availCapa.cores, server->availCapa.mem, server->availCapa.disk, numWJobs, numRJobs);
+			sprintf(curMsg, "%s %d %s %d %d %d %d %d %d\n", 
+				FindResTypeNameByType(server->type), id, 
+				servStates[server->state].state, server->startTime, 
+				server->availCapa.cores, server->availCapa.mem, server->availCapa.disk, 
+				numWJobs, numRJobs);
 
 		if (g_batchMsg || strlen(g_bufferedMsg))
 			sprintf(newMsg, "%*s%s", (int)strlen(g_lastTimeStr) + (int)strlen("SENT "), "", curMsg);
@@ -4524,7 +4546,9 @@ int SendResInfo(char *msgRcvd)
 	int ret;
 	int oldRESC = !(strncmp(msgRcvd, "RESC", CMD_LENGTH));
 	
-	for (str = &msgRcvd[CMD_LENGTH]; !isalpha(*str) && *str != '\0'; str++); // skip spaces between "GETS" and the next search term
+	// skip spaces between "GETS" and the next search term
+	for (str = &msgRcvd[CMD_LENGTH]; !isalpha(*str) && *str != '\0'; str++);
+
 	if (*str != '\0') {
 		if (!strncmp(str, getsOptions[GO_All].optstr, getsOptions[GO_All].optlen)) {
 			if (oldRESC && (ret = SendDataHeader("RESC", 1)) == INTACT_QUIT) return ret;
@@ -4614,6 +4638,83 @@ int SendResInfo(char *msgRcvd)
 
 	if (!oldRESC)
 		ret = SendBatchMsg("GETS", numMsgSent);
+
+	return (ret != INTACT_QUIT ? numMsgSent : ret);
+}
+
+int SendSpecInfoByType(int type)
+{
+	ServerTypeProp *sType = &g_systemInfo.sTypes[type];
+	int ret = TRUE; // 1 as the number of messages sent
+	char curMsg[LARGE_BUF_SIZE];
+	char newMsg[XLARGE_BUF_SIZE];
+
+	sprintf(curMsg, "%s %d %d %.2f %d %d %d %.2f\n", 
+		FindResTypeNameByType(type), sType->limit, sType->bootupTime, sType->rate,
+		sType->capacity.cores, sType->capacity.mem, sType->capacity.disk, 
+		sType->capacity.relSpeed);
+
+	 if (g_batchMsg || strlen(g_bufferedMsg))
+		sprintf(newMsg, "%*s%s", (int)strlen(g_lastTimeStr) + (int)strlen("SENT "), "", curMsg);
+	 else
+		strcpy(newMsg, curMsg);	// no indentation for the first message
+
+	if (strlen(g_bufferedMsg) + strlen(newMsg) > XLARGE_BUF_SIZE) {
+		g_batchMsg = ConcatBatchMsg(g_batchMsg, g_bufferedMsg);
+		g_batchMsg = ConcatBatchMsg(g_batchMsg, newMsg);
+		g_bufferedMsg[0] = '\0';
+	}
+	else 
+		strcat(g_bufferedMsg, newMsg);
+
+	return ret;
+}
+
+int SendSpecInfoAll()
+{
+	int i, nsTypes = g_systemInfo.numServTypes;
+	int numMsgSent = 0, ret;
+	
+	for (i = 0; i < nsTypes; i++) {
+		 ret = SendSpecInfoByType(i);
+		 if (ret == INTACT_QUIT) return ret;
+		numMsgSent += ret;
+	}
+		
+	return numMsgSent;
+}
+
+int SendServerSpec(char *msgRcvd)
+{
+	char *str, optStr[LARGE_BUF_SIZE];
+	int numMsgSent = 0;
+	int ret;
+	
+	// skip spaces between "SPEC" and the next search term
+	for (str = &msgRcvd[CMD_LENGTH]; !isalpha(*str) && *str != '\0'; str++);
+
+	if (*str != '\0') {
+		if (!strncmp(str, specOptions[SP_All].optstr, specOptions[SP_All].optlen)) {
+			if ((numMsgSent = SendSpecInfoAll()) == INTACT_QUIT) return INTACT_QUIT;
+		}
+		else
+		if (!strncmp(str, specOptions[SP_Type].optstr, specOptions[SP_Type].optlen)) {
+			int numFields, servType;
+			char servTypeName[LARGE_BUF_SIZE] = "";
+			
+			if ((numFields = GetArgCount(str)) != 2) return UNDEFINED;
+			numFields = sscanf(str, "%s %s", optStr, servTypeName);
+			servType = FindResTypeByName(servTypeName);
+			if (servType == UNDEFINED) return UNDEFINED;
+			if ((numMsgSent = SendSpecInfoByType(servType)) == INTACT_QUIT) return INTACT_QUIT;
+		}
+		else
+			return UNDEFINED;
+	}
+	else
+		return UNDEFINED;
+
+	ret = SendBatchMsg("SPEC", numMsgSent);
 
 	return (ret != INTACT_QUIT ? numMsgSent : ret);
 }
@@ -5085,6 +5186,11 @@ int AssignToServer(SchedJob *sJob, Server *server, char *msg)
 	return 0;
 }
 
+inline int CalcActJobRunTime(Job *job, int sType)
+{
+	float relSpeed = g_systemInfo.sTypes[sType].capacity.relSpeed;
+	return (MAX(1, ROUND(job->realRunTime / relSpeed)));
+}
 
 // check tha availablity of server including state and resource capacities.
 // if valid, create SchedJob and add it to server, and remove the job from g_ss.waitJQ
@@ -5120,7 +5226,7 @@ int ScheduleJob(int jID, int sType, int sID, SchedJob *mSJob)
 
 	if (server->state == SS_Idle) {	// can start immediately
 		sJob->startTime = g_ss.curSimTime;
-		sJob->endTime = sJob->startTime + job->actRunTime;
+		sJob->endTime = sJob->startTime + CalcActJobRunTime(job, sType);
 		sJob->state = JS_Running;
 		server->state = SS_Active;
 	}
@@ -5129,7 +5235,7 @@ int ScheduleJob(int jID, int sType, int sID, SchedJob *mSJob)
 		sJob->startTime = g_ss.curSimTime + GetServerBootupTime(server->type);
 		server->startTime = sJob->startTime;
 		server->lastAccTime = sJob->startTime;
-		sJob->endTime = sJob->startTime + job->actRunTime;
+		sJob->endTime = sJob->startTime + CalcActJobRunTime(job, sType);
 		sJob->state = JS_Waiting;
 		server->state = SS_Booting;
 	}
@@ -5158,7 +5264,7 @@ int ScheduleJob(int jID, int sType, int sID, SchedJob *mSJob)
 		// since jobs can be only scheduled if there are sufficient resources
 		if (!actWJob && IsSuffAvailRes(resReq, &server->availCapa)) { 
 			sJob->startTime = server->state == SS_Booting ? server->startTime : g_ss.curSimTime;
-			sJob->endTime = sJob->startTime + job->actRunTime;
+			sJob->endTime = sJob->startTime + CalcActJobRunTime(job, sType);
 			sJob->state = sJob->startTime > g_ss.curSimTime ? JS_Waiting : JS_Running;
 		}
 		else
@@ -5356,7 +5462,7 @@ void PrintStats()
 			for (sJob = server->completed; sJob; sJob = sJob->next, numSJobs++) {
 				// Accumulate waiting times, execution times and turnaround times
 				totalWT += (sJob->startTime - sJob->job->submitTime);
-				totalRT += sJob->job->actRunTime;
+				totalRT += CalcActJobRunTime(sJob->job, sJob->sType);
 			}
 			servUtil = (float)server->actUsage / server->totalUsage;
 			servCost = server->totalUsage * (sTypes[i].rate / HOUR_IN_SECONDS);

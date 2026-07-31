@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- variant generated from the corresponding sample configuration -->
+<config randomSeed="2048">
+  <servers>
+    <server type="juju" limit="2" bootupTime="70" hourlyRate="0.2" cores="2" memory="4000" disk="16000" relSpeed="1.0"/>
+    <server type="joon" limit="2" bootupTime="50" hourlyRate="0.4" cores="4" memory="16000" disk="64000" relSpeed="1.2"/>
+    <server type="silk" limit="1" bootupTime="90" hourlyRate="0.8" cores="16" memory="64000" disk="512000" relSpeed="2.0"/>
+  </servers>
+  <jobs>
+    <job type="short" minRunTime="1" maxRunTime="120" populationRate="60" />
+    <job type="medium" minRunTime="121" maxRunTime="600" populationRate="30" />
+    <job type="long" minRunTime="601" maxRunTime="3600" populationRate="10" />
+  </jobs>
+  <workload type="moderate-high" minLoad="45" maxLoad="80" />
+  <termination>
+    <condition type="endtime" value="32768" />
+    <condition type="jobcount" value="10" />
+  </termination>
+</config>
