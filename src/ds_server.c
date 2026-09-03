@@ -37,7 +37,7 @@
 //#define DEBUG
 //#define FAIL_DEBUG
 
-#define VERSION						"03-Jul, 2026 @ MQ" 
+#define VERSION						"03-Sep, 2026 @ MQ" 
 #define DEVELOPERS					"Young Choon Lee, Young Ki Kim and Jayden King"
 
 // global variables
@@ -2809,8 +2809,8 @@ void WriteSystemInfo()
 		ServerRes *capacity = &sType->capacity;
 	
 		fprintf(f, "\t\t<server type=\"%s\" limit=\"%d\" bootupTime=\"%d\" hourlyRate=\"%.2f\" \
-cores=\"%d\" memory=\"%d\" disk=\"%d\" />\n", sType->name, sType->limit, sType->bootupTime, \
-			sType->rate, capacity->cores, capacity->mem, capacity->disk);
+cores=\"%d\" memory=\"%d\" disk=\"%d\" relSpeed=\"%.2f\"/>\n", sType->name, sType->limit, sType->bootupTime, \
+			sType->rate, capacity->cores, capacity->mem, capacity->disk, sType->capacity.relSpeed);
 	}
 	
 	fprintf(f, "\t</servers>\n");
